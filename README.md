@@ -5,9 +5,11 @@ resolve small material interactions; a reduced household model will reproduce
 visits and maintenance. Neither synthetic fixtures nor appealing renders establish
 predictive accuracy for a real household.
 
-Status: foundation only. The compiled extension and development gate work; physics,
-calibration, and replay are planned, not yet implemented. See [the plan](docs/plan.md)
-and [implementation status](docs/status.md).
+Status: foundation and response-table validation library. The compiled extension,
+development gate and bounded interpolation work; numerical scenes, calibration and
+replay are being implemented, not yet integrated. See [the plan](docs/plan.md),
+[implementation status](docs/status.md), [measurement protocol](docs/measurements.md)
+and [response-table limits](docs/response-tables.md).
 
 Requirements: Rust 1.98+, Python 3.12-3.14, `uv`, macOS or a compatible CPU platform.
 

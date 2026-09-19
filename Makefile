@@ -20,6 +20,6 @@ test: ## Run native and Python tests
 doc: ## Build Rust documentation without warnings
 	RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --all-features
 schema: ## Validate committed JSON schemas and examples
-	uv run pytest tests/test_foundation.py
+	uv run pytest tests -k schema
 gate: lint type test doc schema ## Run the non-mutating repository gate
 all: gate ## Run every acceptance check

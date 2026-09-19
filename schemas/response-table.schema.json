@@ -1,0 +1,231 @@
+{
+  "$defs": {
+    "Axis": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Unique input parameter name.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "unit": {
+          "description": "Explicit physical unit, e.g. kg or s.",
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "points": {
+          "description": "Strictly increasing knots.",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "unit",
+        "points"
+      ],
+      "title": "Axis",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_sha256": {
+          "description": "Evidence artifact digest.",
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Artifact Sha256",
+          "type": "string"
+        },
+        "source_revision": {
+          "description": "Source commit tested.",
+          "pattern": "^[a-f0-9]{40}$",
+          "title": "Source Revision",
+          "type": "string"
+        },
+        "species_residual": {
+          "description": "Maximum relative species residual.",
+          "maximum": 1e-06,
+          "minimum": 0,
+          "title": "Species Residual",
+          "type": "number"
+        },
+        "spatial_change": {
+          "description": "Final spatial refinement change.",
+          "exclusiveMaximum": 0.05,
+          "minimum": 0,
+          "title": "Spatial Change",
+          "type": "number"
+        },
+        "temporal_change": {
+          "description": "Final time refinement change.",
+          "exclusiveMaximum": 0.05,
+          "minimum": 0,
+          "title": "Temporal Change",
+          "type": "number"
+        },
+        "held_out_error": {
+          "description": "Held-out surrogate observable error.",
+          "minimum": 0,
+          "title": "Held Out Error",
+          "type": "number"
+        },
+        "repeatability_band": {
+          "description": "Measured relative repeatability.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Repeatability Band",
+          "type": "number"
+        },
+        "near_zero_checked": {
+          "description": "Near-zero cases used instrument uncertainty.",
+          "title": "Near Zero Checked",
+          "type": "boolean"
+        },
+        "domain_boundaries_checked": {
+          "description": "Domain size/boundary studies passed.",
+          "title": "Domain Boundaries Checked",
+          "type": "boolean"
+        },
+        "synthetic": {
+          "description": "True for synthetic-only evidence; cannot promote a table.",
+          "title": "Synthetic",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "artifact_sha256",
+        "source_revision",
+        "species_residual",
+        "spatial_change",
+        "temporal_change",
+        "held_out_error",
+        "repeatability_band",
+        "near_zero_checked",
+        "domain_boundaries_checked",
+        "synthetic"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Response": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Named reduced-model response.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "unit": {
+          "description": "Physical unit of the response.",
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "lower_bound": {
+          "description": "Physical lower bound, including exploration.",
+          "title": "Lower Bound",
+          "type": "number"
+        },
+        "upper_bound": {
+          "description": "Physical upper bound, including exploration.",
+          "title": "Upper Bound",
+          "type": "number"
+        },
+        "values": {
+          "description": "C-order values over the Cartesian axis grid.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "unit",
+        "lower_bound",
+        "upper_bound",
+        "values"
+      ],
+      "title": "Response",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": 1,
+      "description": "Table format version.",
+      "maximum": 1,
+      "minimum": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "name": {
+      "description": "Stable response-table identity.",
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "axes": {
+      "description": "Ordered input axes.",
+      "items": {
+        "$ref": "#/$defs/Axis"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Axes",
+      "type": "array"
+    },
+    "responses": {
+      "description": "Output response grids.",
+      "items": {
+        "$ref": "#/$defs/Response"
+      },
+      "minItems": 1,
+      "title": "Responses",
+      "type": "array"
+    },
+    "evidence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Evidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Independent validation evidence."
+    },
+    "uncertainty_note": {
+      "description": "Parameter and model uncertainty.",
+      "minLength": 1,
+      "title": "Uncertainty Note",
+      "type": "string"
+    },
+    "exploration_margin_fraction": {
+      "default": 0.1,
+      "description": "Maximum explicit extension beyond each axis range.",
+      "maximum": 0.1,
+      "minimum": 0,
+      "title": "Exploration Margin Fraction",
+      "type": "number"
+    }
+  },
+  "required": [
+    "name",
+    "axes",
+    "responses",
+    "uncertainty_note"
+  ],
+  "title": "ResponseTable",
+  "type": "object"
+}

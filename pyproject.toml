@@ -32,6 +32,7 @@ module-name = "litter_physics._core"
 features = ["pyo3/extension-module"]
 
 [tool.ruff]
+src = ["python"]
 target-version = "py312"
 line-length = 99
 

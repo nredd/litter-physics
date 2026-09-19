@@ -1,6 +1,9 @@
 # Implementation status
 
 - Foundation: installed native extension, protocol version, non-mutating gate.
+- Response tables: strict schemas, finite-grid multilinear interpolation, bounded
+  opt-in exploration, evidence acceptance policy. No physical tables shipped and
+  no solver integration yet.
 - Dry mechanics: not implemented.
 - Reduced household model: not implemented.
 - Research MPM and two-way coupling: not implemented.
