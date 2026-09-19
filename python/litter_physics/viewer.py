@@ -20,6 +20,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -368,8 +369,9 @@ def start_loopback_viewer(
         text=True,
         start_new_session=True,
     )
-    web_url = f"http://{LOOPBACK}:{web_port}/"
     grpc_url = f"rerun+http://{LOOPBACK}:{grpc_port}/proxy"
+    query = urllib.parse.urlencode({"url": grpc_url})
+    web_url = f"http://{LOOPBACK}:{web_port}/?{query}"
     handle = ViewerHandle(
         process=process, web_url=web_url, grpc_url=grpc_url, recordings=recordings
     )

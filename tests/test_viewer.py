@@ -7,6 +7,7 @@ References:
 from __future__ import annotations
 
 import socket
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from unittest.mock import patch
@@ -88,6 +89,8 @@ def test_viewer_binds_loopback_only(household_request: SimulationRequest, tmp_pa
             body = response.read(200)
         assert b"<!doctype html>" in body.lower()
         assert handle.grpc_url == f"rerun+http://{LOOPBACK}:{grpc_port}/proxy"
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(handle.web_url).query)
+        assert query.get("url") == [handle.grpc_url], "browser never selects the recording server"
         with pytest.raises(ViewerError, match="already in use"):
             start_loopback_viewer(
                 RunDirectory(tmp_path / "run"), grpc_port=grpc_port, web_port=web_port

@@ -133,3 +133,7 @@ Integration guarantees:
   or expanding unbounded structures.
 - Schema validation is not physical validation or a promise that all native resource
   caps/fixture-specific constraints will pass.
+
+The advertised browser URL includes an encoded `url` query parameter selecting the
+loopback recording server. Opening only the bare HTTP root serves the viewer shell,
+not the selected recording. Keep the full link printed by `view`, including its query.
