@@ -62,6 +62,7 @@ from litter_physics.observations import (
 from litter_physics.runner import BudgetError, RunResult, resume_run, start_run
 from litter_physics.schemas import SCHEMA_FILES, check_schemas, write_schemas
 from litter_physics.sweep import SweepSpec, run_sweep
+from litter_physics.verification import StudyOutcome, load_study, run_study
 from litter_physics.viewer import ViewerError, ledger_summary, start_loopback_viewer
 
 LOGGER = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ VALIDATE_KINDS: dict[str, Callable[[Path], object]] = {
     "bundle": load_bundle,
     "sweep": lambda path: validate_payload(SweepSpec, load_document(path)),
     "profiles": lambda path: load_profiles(_load_list(path)),
+    "study": load_study,
 }
 
 
@@ -307,6 +309,26 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
     return EXIT_OK if report.all_completed else EXIT_INCOMPLETE
 
 
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Run a bounded refinement study against the compiled kernel.
+
+    Parameters:
+        args (argparse.Namespace): Parsed arguments.
+
+    Returns:
+        int: `EXIT_OK` only for `passed`; `EXIT_INCOMPLETE` when any case did not
+            complete; `EXIT_FAILURE` when complete but unresolved.
+    """
+    _require_native()
+    report = run_study(Path(args.study), Path(args.out))
+    print(json.dumps(report.model_dump(mode="json"), indent=2, sort_keys=True))
+    if report.outcome is StudyOutcome.PASSED:
+        return EXIT_OK
+    if report.outcome is StudyOutcome.INCOMPLETE:
+        return EXIT_INCOMPLETE
+    return EXIT_FAILURE
+
+
 def cmd_view(args: argparse.Namespace) -> int:
     """Serve a run's recordings to a loopback-only browser viewer.
 
@@ -510,6 +532,11 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--repetitions", type=int, default=3)
     benchmark.add_argument("--report", default=None, help="JSON report path")
     benchmark.set_defaults(func=cmd_benchmark)
+
+    verify = subparsers.add_parser("verify", help="bounded spatial/temporal refinement study")
+    verify.add_argument("study", help="study specification YAML/JSON")
+    verify.add_argument("--out", required=True, help="new study directory")
+    verify.set_defaults(func=cmd_verify)
 
     view = subparsers.add_parser("view", help="loopback-only browser replay")
     view.add_argument("run_dir")

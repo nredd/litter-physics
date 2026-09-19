@@ -21,6 +21,7 @@ from litter_physics.calibration import CalibrationBundle
 from litter_physics.models import Checkpoint, SimulationOutput, SimulationRequest, export_schema
 from litter_physics.observations import ObservationSet
 from litter_physics.sweep import SweepSpec
+from litter_physics.verification import StudyReport, StudySpec
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +33,8 @@ SCHEMA_FILES: dict[str, type[BaseModel]] = {
     "calibration-bundle.schema.json": CalibrationBundle,
     "cat-profile.schema.json": CatProfile,
     "sweep-spec.schema.json": SweepSpec,
+    "verification-study.schema.json": StudySpec,
+    "verification-report.schema.json": StudyReport,
 }
 
 

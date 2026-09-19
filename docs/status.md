@@ -11,6 +11,11 @@ Implemented and exercised:
   recording verification, build-compatible resume and explicit budget/deadline outcomes.
 - Synthetic observation import, identifiable curve fits, duration-only personalization
   scoring, visit-stage generation, sweeps and benchmarks.
+- Bounded, separately varied spatial/time refinement studies using the real research
+  kernel. The committed slump example completes but remains `unresolved`: spatial
+  spread and plastic dissipation have not met the 5% final-two-change criterion.
+  Missing diagnostics, adaptive limiting, incomplete cases and deadline overruns
+  cannot pass. This facility does not establish measured validation.
 - Standalone response-table validation/interpolation with bounded exploration and
   fail-closed evidence policy. No physical response tables are shipped.
 

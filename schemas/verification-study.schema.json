@@ -1,0 +1,172 @@
+{
+  "$defs": {
+    "ObservableSpec": {
+      "additionalProperties": false,
+      "description": "One named observable and its documented near-zero absolute scale.",
+      "properties": {
+        "name": {
+          "description": "Native observable key.",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "near_zero_scale": {
+          "description": "Absolute scale in the observable's units below which the value is uninformative; also the denominator floor for relative changes.",
+          "exclusiveMinimum": 0,
+          "title": "Near Zero Scale",
+          "type": "number"
+        },
+        "note": {
+          "default": "",
+          "description": "Why this scale is appropriate.",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "near_zero_scale"
+      ],
+      "title": "ObservableSpec",
+      "type": "object"
+    },
+    "SpatialAxisSpec": {
+      "additionalProperties": false,
+      "description": "Grid refinement at one fixed, small timestep.",
+      "properties": {
+        "dt_s": {
+          "description": "Fixed timestep cap shared by every spatial case.",
+          "exclusiveMinimum": 0,
+          "title": "Dt S",
+          "type": "number"
+        },
+        "grid_spacings_m": {
+          "description": "Grid spacings in metres, coarse to fine.",
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "maxItems": 6,
+          "minItems": 3,
+          "title": "Grid Spacings M",
+          "type": "array"
+        }
+      },
+      "required": [
+        "grid_spacings_m",
+        "dt_s"
+      ],
+      "title": "SpatialAxisSpec",
+      "type": "object"
+    },
+    "TemporalAxisSpec": {
+      "additionalProperties": false,
+      "description": "Timestep refinement on one fixed grid.",
+      "properties": {
+        "dt_values_s": {
+          "description": "Timestep caps in seconds, coarse to fine.",
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "maxItems": 6,
+          "minItems": 3,
+          "title": "Dt Values S",
+          "type": "array"
+        },
+        "grid_spacing_m": {
+          "description": "Fixed grid spacing shared by every case.",
+          "exclusiveMinimum": 0,
+          "title": "Grid Spacing M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "grid_spacing_m",
+        "dt_values_s"
+      ],
+      "title": "TemporalAxisSpec",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Refinement study definition loaded from YAML or JSON.",
+  "properties": {
+    "base_request": {
+      "description": "Research request path, relative to the spec.",
+      "title": "Base Request",
+      "type": "string"
+    },
+    "label": {
+      "default": "refinement",
+      "description": "Human label stored in the report.",
+      "title": "Label",
+      "type": "string"
+    },
+    "max_relative_change": {
+      "default": 0.05,
+      "description": "Strict upper bound on the final-two relative change per observable.",
+      "exclusiveMinimum": 0,
+      "maximum": 0.05,
+      "title": "Max Relative Change",
+      "type": "number"
+    },
+    "observables": {
+      "description": "Observables the criterion is evaluated on.",
+      "items": {
+        "$ref": "#/$defs/ObservableSpec"
+      },
+      "minItems": 1,
+      "title": "Observables",
+      "type": "array"
+    },
+    "per_case_wall_budget_s": {
+      "description": "Wall ceiling for each case, at most one hour.",
+      "exclusiveMinimum": 0,
+      "maximum": 3600.0,
+      "title": "Per Case Wall Budget S",
+      "type": "number"
+    },
+    "spatial": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpatialAxisSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Spatial axis."
+    },
+    "temporal": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TemporalAxisSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Temporal axis."
+    },
+    "total_wall_budget_s": {
+      "description": "Hard cap on wall time spent starting and running cases.",
+      "exclusiveMinimum": 0,
+      "maximum": 43200.0,
+      "title": "Total Wall Budget S",
+      "type": "number"
+    }
+  },
+  "required": [
+    "base_request",
+    "observables",
+    "per_case_wall_budget_s",
+    "total_wall_budget_s"
+  ],
+  "title": "StudySpec",
+  "type": "object"
+}

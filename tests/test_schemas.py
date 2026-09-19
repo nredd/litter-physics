@@ -46,6 +46,10 @@ def test_examples_validate_against_schema() -> None:
     jsonschema.Draft202012Validator(sweep).validate(
         yaml.safe_load((EXAMPLES / "sweep_friction.yaml").read_text(encoding="utf-8"))
     )
+    study = json.loads((SCHEMAS / "verification-study.schema.json").read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator(study).validate(
+        yaml.safe_load((EXAMPLES / "verification_slump.yaml").read_text(encoding="utf-8"))
+    )
     profiles = json.loads((SCHEMAS / "cat-profile.schema.json").read_text(encoding="utf-8"))
     for profile in yaml.safe_load(
         (EXAMPLES / "cat_profiles_synthetic.yaml").read_text(encoding="utf-8")

@@ -258,7 +258,10 @@ class ResearchCfg(StrictModel):
         ):
             if size > domain:
                 raise ValueError(f"`initial_size_m[{axis}]` exceeds `domain_m[{axis}]`")
-        cells = math.prod(math.ceil(extent / self.grid_spacing_m) for extent in self.domain_m)
+        counts = [extent / self.grid_spacing_m for extent in self.domain_m]
+        if not all(math.isfinite(count) for count in counts):
+            raise ValueError("research grid cells overflow; increase `grid_spacing_m`")
+        cells = math.prod(math.ceil(count) for count in counts)
         if cells > MAX_RESEARCH_CELLS:
             raise ValueError(
                 f"research grid would allocate {cells} cells, above the cap "

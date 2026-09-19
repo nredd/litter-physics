@@ -110,9 +110,10 @@ def test_research_rules(research_request: SimulationRequest) -> None:
     with pytest.raises(ValueError, match="requires `research`"):
         validate_payload(SimulationRequest, tree)
     tree = payload(research_request)
-    tree["research"]["grid_spacing_m"] = 1e-6
-    with pytest.raises(ValueError, match="cells"):
-        validate_payload(SimulationRequest, tree)
+    for spacing in (1e-6, 5e-324):
+        tree["research"]["grid_spacing_m"] = spacing
+        with pytest.raises(ValueError, match="cells"):
+            validate_payload(SimulationRequest, tree)
     tree = payload(research_request)
     tree["research"]["initial_size_m"] = [1.0, 0.02, 0.02]
     with pytest.raises(ValueError, match="exceeds"):

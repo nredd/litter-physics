@@ -140,3 +140,18 @@ not the selected recording. Keep the full link printed by `view`, including its 
 The CLI prints and opens that canonical link unchanged; it must not append a second
 source parameter or leave the `+` in `rerun+http` unescaped (query parsing turns it
 into a space). Tests cover both the server handle and the browser-opening CLI path.
+
+Research refinement:
+
+```sh
+uv run litter-physics validate --kind study examples/verification_slump.yaml
+uv run litter-physics verify examples/verification_slump.yaml --out outputs/refinement
+```
+
+`verify` writes independent case run directories and `study_report.json`. Exit 0 means
+only that the requested threshold checks passed, 1 means complete but unresolved, and
+3 means incomplete. The supplied example currently exits 1. Existing nonempty study
+directories are refused. See `verification.md` for separate spatial/time axes, explicit
+near-zero scales, adaptive-step checks and cooperative (not preemptive) wall budgets.
+Extremely small grid spacings fail request validation as oversized/nonfinite cell
+counts, rather than escaping the validator as an integer-conversion exception.

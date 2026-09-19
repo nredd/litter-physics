@@ -34,7 +34,12 @@ uv run litter-physics run examples/research_slump.yaml --out outputs/slump --wal
 uv run litter-physics calibrate --observations examples/observations_synthetic.json \
   --template examples/maintenance_smoke.yaml --out outputs/calibration.json
 uv run litter-physics benchmark examples/maintenance_smoke.yaml --repetitions 3
+uv run litter-physics verify examples/verification_slump.yaml --out outputs/refinement
 ```
+
+The refinement example currently exits **1 (`unresolved`)**, not 0: spatial spread
+and plastic dissipation have not met the 5% final-two-change criterion. Its complete
+case artifacts and report remain available. See [verification studies](docs/verification.md).
 
 Synthetic calibration never establishes measured parameters or supported household
 personalization. Collect real observations using [docs/measurements.md](docs/measurements.md).
@@ -50,6 +55,8 @@ personalization. Collect real observations using [docs/measurements.md](docs/mea
 - Strict configuration/schema checks, bounded jobs, full native checkpoints, build-
   compatible resume, immutable segment artifacts, Parquet metrics and Rerun replay.
 - Observation import, simple material fits, synthetic visit profiles, sweeps and benchmarks.
+- Separate spatial/time refinement studies with per-case artifacts, total budgeting,
+  adaptive-step diagnostics and fail-closed acceptance of named observables.
 - Response-table validation/interpolation library, not yet connected to the native model.
 
 ## Not implemented or accepted
@@ -58,7 +65,7 @@ personalization. Collect real observations using [docs/measurements.md](docs/mea
 - Validated research-to-household response tables or realistic household paste transport.
 - Adaptive between-visit evolution for multi-day runs, actual box entrances/pads, and
   per-cat stroke trajectories connected to native events.
-- Full convergence studies, measured surrogate validation, your cats' calibration, or
+- Accepted convergence studies, measured surrogate validation, your cats' calibration, or
   an actual-size-box runtime acceptance study.
 
 Outputs carry these limitations. Small demo timings must not be extrapolated to a

@@ -1,0 +1,29 @@
+# SYNTHETIC NUMERICAL VERIFICATION STUDY on the paste slump fixture. Material
+# parameters come from `research_slump.yaml` and have no measured provenance, so a
+# `passed` outcome verifies the kernel's refinement behaviour only; it is never
+# surrogate validation and never grounds to promote a response table.
+#
+# Spatial axis: grid spacing halves twice at one fixed timestep cap well below the
+# CFL limit of the finest grid. Temporal axis: the timestep cap halves twice on the
+# base grid. Duration, geometry, material and seed are inherited and never vary.
+base_request: research_slump.yaml
+label: slump-refinement
+spatial:
+  grid_spacings_m: [0.01, 0.005, 0.0025]
+  dt_s: 0.00005
+temporal:
+  grid_spacing_m: 0.005
+  dt_values_s: [0.0004, 0.0002, 0.0001]
+observables:
+  - name: slump_m
+    near_zero_scale: 0.0005
+    note: "0.5 mm, below the finest half-cell; smaller slumps are unresolvable here"
+  - name: spread_x_m
+    near_zero_scale: 0.0005
+    note: "same surface-estimate floor as slump_m"
+  - name: plastic_dissipation_j
+    near_zero_scale: 0.000001
+    note: "1 uJ; the block's initial potential energy is ~0.8 mJ"
+max_relative_change: 0.05
+per_case_wall_budget_s: 900.0
+total_wall_budget_s: 3600.0

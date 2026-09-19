@@ -1,0 +1,690 @@
+{
+  "$defs": {
+    "AxisReport": {
+      "additionalProperties": false,
+      "description": "One refinement axis.",
+      "properties": {
+        "axis": {
+          "$ref": "#/$defs/RefinementAxis",
+          "description": "Axis name."
+        },
+        "cases": {
+          "description": "Per-case outcomes.",
+          "items": {
+            "$ref": "#/$defs/CaseOutcome"
+          },
+          "title": "Cases",
+          "type": "array"
+        },
+        "complete": {
+          "description": "Whether every case completed.",
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "fixed_parameter": {
+          "description": "Dotted request path held fixed.",
+          "title": "Fixed Parameter",
+          "type": "string"
+        },
+        "fixed_value": {
+          "description": "Fixed parameter value.",
+          "title": "Fixed Value",
+          "type": "number"
+        },
+        "observables": {
+          "description": "Per-observable verdicts.",
+          "items": {
+            "$ref": "#/$defs/ObservableVerdict"
+          },
+          "title": "Observables",
+          "type": "array"
+        },
+        "outcome": {
+          "$ref": "#/$defs/StudyOutcome",
+          "description": "Axis outcome."
+        },
+        "reasons": {
+          "description": "Axis-level reasons for not passing.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "timestep_cap_binding": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whether `max_dt_s` equalled `dt_s` in every completed case; None when the axis is incomplete.",
+          "title": "Timestep Cap Binding"
+        },
+        "values": {
+          "description": "Varied parameter values, coarse to fine.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Values",
+          "type": "array"
+        },
+        "varied_parameter": {
+          "description": "Dotted request path that varies.",
+          "title": "Varied Parameter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "axis",
+        "varied_parameter",
+        "values",
+        "fixed_parameter",
+        "fixed_value",
+        "cases",
+        "complete",
+        "timestep_cap_binding",
+        "observables",
+        "outcome",
+        "reasons"
+      ],
+      "title": "AxisReport",
+      "type": "object"
+    },
+    "CaseOutcome": {
+      "additionalProperties": false,
+      "description": "Summary of one executed or skipped case.",
+      "properties": {
+        "axis": {
+          "$ref": "#/$defs/RefinementAxis",
+          "description": "Axis the case belongs to."
+        },
+        "case_index": {
+          "description": "Zero-based position, coarse to fine.",
+          "minimum": 0,
+          "title": "Case Index",
+          "type": "integer"
+        },
+        "dt_s": {
+          "description": "Timestep cap used.",
+          "title": "Dt S",
+          "type": "number"
+        },
+        "duration_s": {
+          "description": "Requested simulated duration.",
+          "title": "Duration S",
+          "type": "number"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Failure message when the case failed.",
+          "title": "Error"
+        },
+        "fidelity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Native fidelity label of the output.",
+          "title": "Fidelity"
+        },
+        "grid_spacing_m": {
+          "description": "Grid spacing used.",
+          "title": "Grid Spacing M",
+          "type": "number"
+        },
+        "observables": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Final native observables.",
+          "title": "Observables",
+          "type": "object"
+        },
+        "run_dir": {
+          "description": "Run directory holding the case artifacts.",
+          "title": "Run Dir",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/CaseStatus",
+          "description": "Case status."
+        },
+        "time_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Simulation time reached.",
+          "title": "Time S"
+        },
+        "wall_budget_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Budget granted; None when not started.",
+          "title": "Wall Budget S"
+        },
+        "wall_time_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Wall time consumed.",
+          "title": "Wall Time S"
+        }
+      },
+      "required": [
+        "axis",
+        "case_index",
+        "run_dir",
+        "grid_spacing_m",
+        "dt_s",
+        "wall_budget_s",
+        "status",
+        "duration_s",
+        "time_s",
+        "wall_time_s",
+        "fidelity",
+        "observables",
+        "error"
+      ],
+      "title": "CaseOutcome",
+      "type": "object"
+    },
+    "CaseStatus": {
+      "description": "Outcome of one case, a superset of `RunStatus`.",
+      "enum": [
+        "completed",
+        "budget_exhausted",
+        "deadline_exceeded",
+        "failed",
+        "not_started"
+      ],
+      "title": "CaseStatus",
+      "type": "string"
+    },
+    "ChangeTrend": {
+      "description": "Shape of the successive absolute changes; a trend is not a convergence proof.",
+      "enum": [
+        "decreasing",
+        "non_monotone",
+        "undetermined"
+      ],
+      "title": "ChangeTrend",
+      "type": "string"
+    },
+    "Fixture": {
+      "description": "Research fixture names.",
+      "enum": [
+        "slump",
+        "hydrostatic",
+        "dam_break",
+        "coupled_patch"
+      ],
+      "title": "Fixture",
+      "type": "string"
+    },
+    "HardwareInfo": {
+      "additionalProperties": false,
+      "description": "Description of the producing host.",
+      "properties": {
+        "cpu_count": {
+          "description": "Logical CPUs visible to the process.",
+          "title": "Cpu Count",
+          "type": "integer"
+        },
+        "machine": {
+          "description": "CPU architecture string.",
+          "title": "Machine",
+          "type": "string"
+        },
+        "memory_bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Physical memory when discoverable.",
+          "title": "Memory Bytes"
+        },
+        "processor": {
+          "description": "Processor description, possibly empty.",
+          "title": "Processor",
+          "type": "string"
+        },
+        "release": {
+          "description": "Operating system release.",
+          "title": "Release",
+          "type": "string"
+        },
+        "system": {
+          "description": "Operating system name.",
+          "title": "System",
+          "type": "string"
+        }
+      },
+      "required": [
+        "machine",
+        "system",
+        "release",
+        "processor",
+        "cpu_count",
+        "memory_bytes"
+      ],
+      "title": "HardwareInfo",
+      "type": "object"
+    },
+    "ObservableOutcome": {
+      "description": "Per-observable criterion result.",
+      "enum": [
+        "passed",
+        "unresolved",
+        "uninformative",
+        "missing",
+        "nonfinite",
+        "not_evaluated"
+      ],
+      "title": "ObservableOutcome",
+      "type": "string"
+    },
+    "ObservableVerdict": {
+      "additionalProperties": false,
+      "description": "Criterion evaluation for one observable along one axis.",
+      "properties": {
+        "absolute_changes": {
+          "description": "Successive absolute changes; None when undefined or overflowed.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Absolute Changes",
+          "type": "array"
+        },
+        "final_relative_change": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Change between the finest two.",
+          "title": "Final Relative Change"
+        },
+        "name": {
+          "description": "Observable key.",
+          "title": "Name",
+          "type": "string"
+        },
+        "near_zero": {
+          "description": "Whether the finest value is below the scale.",
+          "title": "Near Zero",
+          "type": "boolean"
+        },
+        "near_zero_scale": {
+          "description": "Documented absolute scale.",
+          "title": "Near Zero Scale",
+          "type": "number"
+        },
+        "observed_order": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Apparent order from the last three cases when the refinement ratio is uniform and both changes are nonzero; an estimate, not an asymptotic claim.",
+          "title": "Observed Order"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ObservableOutcome",
+          "description": "Criterion result."
+        },
+        "reasons": {
+          "description": "Why the outcome is not `passed`.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "relative_changes": {
+          "description": "Successive changes over max(|finer value|, near_zero_scale).",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Relative Changes",
+          "type": "array"
+        },
+        "trend": {
+          "$ref": "#/$defs/ChangeTrend",
+          "description": "Shape of successive changes; not a proof."
+        },
+        "values": {
+          "description": "Value per case, coarse to fine; None when missing or nonfinite.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "near_zero_scale",
+        "values",
+        "absolute_changes",
+        "relative_changes",
+        "final_relative_change",
+        "near_zero",
+        "trend",
+        "observed_order",
+        "outcome",
+        "reasons"
+      ],
+      "title": "ObservableVerdict",
+      "type": "object"
+    },
+    "RefinementAxis": {
+      "description": "Which discretization parameter an axis varies.",
+      "enum": [
+        "spatial",
+        "temporal"
+      ],
+      "title": "RefinementAxis",
+      "type": "string"
+    },
+    "StudyOutcome": {
+      "description": "Overall outcome of an axis or a whole study.",
+      "enum": [
+        "passed",
+        "unresolved",
+        "incomplete"
+      ],
+      "title": "StudyOutcome",
+      "type": "string"
+    },
+    "StudyProvenance": {
+      "additionalProperties": false,
+      "description": "Source and build identity of the kernel that produced the study.",
+      "properties": {
+        "dependencies": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Tracked dependency versions.",
+          "title": "Dependencies",
+          "type": "object"
+        },
+        "git_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Repository commit, when known.",
+          "title": "Git Commit"
+        },
+        "git_dirty": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whether the working tree had changes.",
+          "title": "Git Dirty"
+        },
+        "hardware": {
+          "$ref": "#/$defs/HardwareInfo",
+          "description": "Producing host."
+        },
+        "native_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Hash of the compiled extension.",
+          "title": "Native Sha256"
+        },
+        "package_version": {
+          "description": "`litter_physics` version.",
+          "title": "Package Version",
+          "type": "string"
+        },
+        "python_code_sha256": {
+          "description": "Hash of the Python package sources.",
+          "title": "Python Code Sha256",
+          "type": "string"
+        },
+        "python_version": {
+          "description": "Interpreter version.",
+          "title": "Python Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_version",
+        "python_code_sha256",
+        "native_sha256",
+        "git_commit",
+        "git_dirty",
+        "python_version",
+        "dependencies",
+        "hardware"
+      ],
+      "title": "StudyProvenance",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Machine-readable study outcome.",
+  "properties": {
+    "axes": {
+      "description": "Evaluated axes.",
+      "items": {
+        "$ref": "#/$defs/AxisReport"
+      },
+      "title": "Axes",
+      "type": "array"
+    },
+    "base_request_sha256": {
+      "description": "Hash of the canonical base request.",
+      "title": "Base Request Sha256",
+      "type": "string"
+    },
+    "claim": {
+      "description": "Standing statement of what a pass means.",
+      "title": "Claim",
+      "type": "string"
+    },
+    "created_utc": {
+      "description": "ISO-8601 creation time.",
+      "title": "Created Utc",
+      "type": "string"
+    },
+    "criterion_met": {
+      "description": "Every observable passed on every axis.",
+      "title": "Criterion Met",
+      "type": "boolean"
+    },
+    "duration_s": {
+      "description": "Simulated duration shared by every case.",
+      "title": "Duration S",
+      "type": "number"
+    },
+    "fidelity": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Native fidelity label common to every completed case; None when no case completed or labels disagree.",
+      "title": "Fidelity"
+    },
+    "fixture": {
+      "$ref": "#/$defs/Fixture",
+      "description": "Research fixture under study."
+    },
+    "label": {
+      "description": "Study label.",
+      "title": "Label",
+      "type": "string"
+    },
+    "material": {
+      "description": "Continuum material name.",
+      "title": "Material",
+      "type": "string"
+    },
+    "max_relative_change": {
+      "description": "Criterion threshold.",
+      "title": "Max Relative Change",
+      "type": "number"
+    },
+    "omitted_gates": {
+      "description": "Acceptance gates this study does not cover.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Omitted Gates",
+      "type": "array"
+    },
+    "outcome": {
+      "$ref": "#/$defs/StudyOutcome",
+      "description": "`passed`, `unresolved`, or `incomplete`."
+    },
+    "provenance": {
+      "$ref": "#/$defs/StudyProvenance",
+      "description": "Build and source identity."
+    },
+    "reasons": {
+      "description": "Study-level reasons for not passing.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "seed": {
+      "description": "Seed shared by every case.",
+      "title": "Seed",
+      "type": "integer"
+    },
+    "spec_sha256": {
+      "description": "Hash of the canonical study spec.",
+      "title": "Spec Sha256",
+      "type": "string"
+    },
+    "study_complete": {
+      "description": "Every case on every axis completed.",
+      "title": "Study Complete",
+      "type": "boolean"
+    },
+    "total_budget_exceeded": {
+      "description": "Whether `total_wall_time_s` overran `total_wall_budget_s`. The cap is checked before each case starts and bounds each case's own budget; it does not preempt a running case or artifact finalization. Overruns are possible and are never a pass; there is no guaranteed bound on finalization time.",
+      "title": "Total Budget Exceeded",
+      "type": "boolean"
+    },
+    "total_wall_budget_s": {
+      "description": "Study cap.",
+      "title": "Total Wall Budget S",
+      "type": "number"
+    },
+    "total_wall_time_s": {
+      "description": "Wall time from study start through evaluation, measured just before this report was assembled; the report write and log tail are not included.",
+      "title": "Total Wall Time S",
+      "type": "number"
+    }
+  },
+  "required": [
+    "label",
+    "created_utc",
+    "spec_sha256",
+    "base_request_sha256",
+    "fixture",
+    "material",
+    "duration_s",
+    "seed",
+    "fidelity",
+    "provenance",
+    "max_relative_change",
+    "axes",
+    "study_complete",
+    "criterion_met",
+    "outcome",
+    "reasons",
+    "total_wall_budget_s",
+    "total_wall_time_s",
+    "total_budget_exceeded",
+    "omitted_gates",
+    "claim"
+  ],
+  "title": "StudyReport",
+  "type": "object"
+}
