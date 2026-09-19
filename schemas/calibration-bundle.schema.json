@@ -1,0 +1,208 @@
+{
+  "$defs": {
+    "Parameter": {
+      "additionalProperties": false,
+      "description": "One calibrated or assumed parameter with full provenance.",
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Identifiability or caveat note.",
+          "title": "Note"
+        },
+        "provenance": {
+          "description": "How the value was obtained.",
+          "title": "Provenance",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "description": "`measured`, `literature_prior`, or `assumed`."
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "One-sigma uncertainty when estimated.",
+          "title": "Uncertainty"
+        },
+        "unit": {
+          "description": "SI unit string.",
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "description": "Parameter value in `unit`.",
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "uncertainty",
+        "status",
+        "provenance"
+      ],
+      "title": "Parameter",
+      "type": "object"
+    },
+    "PersonalizationScore": {
+      "additionalProperties": false,
+      "description": "Held-out comparison of a per-cat model against the generic baseline.",
+      "properties": {
+        "cat_id": {
+          "description": "Cat identifier.",
+          "title": "Cat Id",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "`strong`, `weak`, `insufficient`, or `synthetic`.",
+          "title": "Evidence",
+          "type": "string"
+        },
+        "generic_log_likelihood": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Generic baseline value.",
+          "title": "Generic Log Likelihood"
+        },
+        "holdout_visits": {
+          "description": "Contiguous held-out visits.",
+          "title": "Holdout Visits",
+          "type": "integer"
+        },
+        "per_cat_log_likelihood": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Mean held-out log-likelihood.",
+          "title": "Per Cat Log Likelihood"
+        },
+        "supported": {
+          "description": "Measured per-cat evidence beats generic with at least 20 training visits.",
+          "title": "Supported",
+          "type": "boolean"
+        },
+        "train_visits": {
+          "description": "Visits used to fit the per-cat model.",
+          "title": "Train Visits",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cat_id",
+        "train_visits",
+        "holdout_visits",
+        "per_cat_log_likelihood",
+        "generic_log_likelihood",
+        "supported",
+        "evidence"
+      ],
+      "title": "PersonalizationScore",
+      "type": "object"
+    },
+    "Provenance": {
+      "description": "Where a number comes from.",
+      "enum": [
+        "measured",
+        "literature_prior",
+        "assumed"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Versioned calibration output consumed by runs and provenance.",
+  "properties": {
+    "diagnostics": {
+      "description": "Identifiability and coverage notes.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "observations_sha256": {
+      "description": "Hash of the observation set.",
+      "title": "Observations Sha256",
+      "type": "string"
+    },
+    "parameters": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Parameter"
+      },
+      "description": "Household material parameters.",
+      "title": "Parameters",
+      "type": "object"
+    },
+    "personalization": {
+      "description": "Per-cat held-out scores.",
+      "items": {
+        "$ref": "#/$defs/PersonalizationScore"
+      },
+      "title": "Personalization",
+      "type": "array"
+    },
+    "rheology": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Parameter"
+      },
+      "description": "Herschel-Bulkley parameters.",
+      "title": "Rheology",
+      "type": "object"
+    },
+    "schema_version": {
+      "description": "Bundle schema version.",
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "synthetic": {
+      "description": "True when derived from synthetic observations.",
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "validation_claim": {
+      "description": "Explicit statement of what is established.",
+      "title": "Validation Claim",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "observations_sha256",
+    "parameters",
+    "rheology",
+    "personalization",
+    "diagnostics",
+    "validation_claim"
+  ],
+  "title": "CalibrationBundle",
+  "type": "object"
+}

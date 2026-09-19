@@ -1,0 +1,158 @@
+# SYNTHETIC tiny maintenance regression, not measured household parameters.
+schema_version: 1
+mode: household
+seed: 1
+duration_s: 0.2
+dt_s: 0.002
+record_interval_s: 0.02
+max_wall_time_s: 30.0
+boxes:
+- id: box-a
+  size_m:
+  - 0.06
+  - 0.05
+  - 0.04
+  origin_m:
+  - 0.0
+  - 0.0
+  - 0.0
+  slot_width_m: 0.005
+  slot_length_m: 0.015
+  slot_pitch_m: 0.02
+  drawer_depth_m: 0.03
+  pellet_count: 4
+  pellet_radius_m: 0.003
+  pellet_length_m: 0.012
+  pellet_density_kg_m3: 1100.0
+- id: box-b
+  size_m:
+  - 0.06
+  - 0.05
+  - 0.04
+  origin_m:
+  - 0.2
+  - 0.0
+  - 0.0
+  slot_width_m: 0.005
+  slot_length_m: 0.015
+  slot_pitch_m: 0.02
+  drawer_depth_m: 0.03
+  pellet_count: 4
+  pellet_radius_m: 0.003
+  pellet_length_m: 0.012
+  pellet_density_kg_m3: 1100.0
+materials:
+  friction: 0.4
+  restitution: 0.2
+  normal_stiffness_n_m: 1000.0
+  water_capacity_ratio: 3.0
+  uptake_rate_s: 50.0
+  breakdown_rate_s: 20.0
+  evaporation_rate_s: 1.0e-05
+events:
+- time_s: 0.01
+  kind: urinate
+  box_id: box-a
+  position_m:
+  - 0.03
+  - 0.025
+  - 0.008
+  direction:
+  - 1.0
+  - 0.0
+  - 0.0
+  duration_s: 0.02
+  amount_kg: 0.001
+  water_fraction: 1.0
+  radius_m: 0.02
+- time_s: 0.05
+  kind: defecate
+  box_id: box-a
+  position_m:
+  - 0.03
+  - 0.025
+  - 0.008
+  direction:
+  - 1.0
+  - 0.0
+  - 0.0
+  duration_s: 0.0
+  amount_kg: 0.0008
+  water_fraction: 0.3
+  radius_m: 0.02
+- time_s: 0.07
+  kind: cover
+  box_id: box-a
+  position_m:
+  - 0.03
+  - 0.025
+  - 0.008
+  direction:
+  - 1.0
+  - 0.0
+  - 0.0
+  duration_s: 0.02
+  amount_kg: 0.0
+  water_fraction: 0.0
+  radius_m: 0.02
+- time_s: 0.11
+  kind: scoop
+  box_id: box-a
+  position_m:
+  - 0.03
+  - 0.025
+  - 0.008
+  direction:
+  - 1.0
+  - 0.0
+  - 0.0
+  duration_s: 0.0
+  amount_kg: 0.0
+  water_fraction: 0.0
+  radius_m: 0.02
+- time_s: 0.13
+  kind: stir
+  box_id: box-b
+  position_m:
+  - 0.03
+  - 0.025
+  - 0.008
+  direction:
+  - 1.0
+  - 0.0
+  - 0.0
+  duration_s: 0.02
+  amount_kg: 0.0
+  water_fraction: 0.0
+  radius_m: 0.02
+- time_s: 0.16
+  kind: empty_drawer
+  box_id: box-a
+  position_m:
+  - 0.03
+  - 0.025
+  - 0.008
+  direction:
+  - 1.0
+  - 0.0
+  - 0.0
+  duration_s: 0.0
+  amount_kg: 0.0
+  water_fraction: 0.0
+  radius_m: 0.02
+- time_s: 0.18
+  kind: refill
+  box_id: box-a
+  position_m:
+  - 0.03
+  - 0.025
+  - 0.008
+  direction:
+  - 1.0
+  - 0.0
+  - 0.0
+  duration_s: 0.0
+  amount_kg: 0.001
+  water_fraction: 0.0
+  radius_m: 0.02
+research: null

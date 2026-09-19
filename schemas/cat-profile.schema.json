@@ -1,0 +1,188 @@
+{
+  "$defs": {
+    "LogNormal": {
+      "additionalProperties": false,
+      "description": "Lognormal sojourn or count distribution.",
+      "properties": {
+        "log_mean": {
+          "description": "Mean of the natural log.",
+          "title": "Log Mean",
+          "type": "number"
+        },
+        "log_sigma": {
+          "description": "Standard deviation of the natural log.",
+          "exclusiveMinimum": 0,
+          "title": "Log Sigma",
+          "type": "number"
+        }
+      },
+      "required": [
+        "log_mean",
+        "log_sigma"
+      ],
+      "title": "LogNormal",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Empirical or synthetic behaviour profile for one cat.",
+  "properties": {
+    "box_weights": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "number"
+      },
+      "description": "Relative box preference.",
+      "title": "Box Weights",
+      "type": "object"
+    },
+    "cat_id": {
+      "description": "Cat identifier.",
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "title": "Cat Id",
+      "type": "string"
+    },
+    "cover_strokes": {
+      "$ref": "#/$defs/LogNormal",
+      "description": "Cover stroke count (rounded, >= 1)."
+    },
+    "deposit_mass": {
+      "$ref": "#/$defs/LogNormal",
+      "description": "Deposit mass in kilograms."
+    },
+    "dig_strokes": {
+      "$ref": "#/$defs/LogNormal",
+      "description": "Dig stroke count (rounded, >= 1)."
+    },
+    "eliminate": {
+      "$ref": "#/$defs/LogNormal",
+      "description": "Eliminate stage duration, seconds."
+    },
+    "inspect": {
+      "$ref": "#/$defs/LogNormal",
+      "description": "Inspect stage duration, seconds."
+    },
+    "location_fraction": {
+      "description": "Preferred (x, y) position as fractions of the box footprint.",
+      "items": {
+        "maximum": 1,
+        "minimum": 0,
+        "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "title": "Location Fraction",
+      "type": "array"
+    },
+    "location_spread_m": {
+      "description": "Positional spread in metres.",
+      "minimum": 0,
+      "title": "Location Spread M",
+      "type": "number"
+    },
+    "observed_visits": {
+      "description": "Visits the profile was built from.",
+      "minimum": 0,
+      "title": "Observed Visits",
+      "type": "integer"
+    },
+    "p_abandon": {
+      "description": "Abandon after inspect.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "P Abandon",
+      "type": "number"
+    },
+    "p_no_cover": {
+      "description": "Skip covering.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "P No Cover",
+      "type": "number"
+    },
+    "p_repeat_dig": {
+      "description": "Repeat the dig stage once more.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "P Repeat Dig",
+      "type": "number"
+    },
+    "p_skip_dig": {
+      "description": "Skip the dig stage.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "P Skip Dig",
+      "type": "number"
+    },
+    "p_soft_stool": {
+      "description": "Soft stool given defecation.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "P Soft Stool",
+      "type": "number"
+    },
+    "p_urine": {
+      "description": "Urination versus defecation.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "P Urine",
+      "type": "number"
+    },
+    "paw_radius_m": {
+      "description": "Paw contact proxy radius in metres.",
+      "exclusiveMinimum": 0,
+      "title": "Paw Radius M",
+      "type": "number"
+    },
+    "source_height_m": {
+      "description": "Elimination source height above the bed.",
+      "exclusiveMinimum": 0,
+      "title": "Source Height M",
+      "type": "number"
+    },
+    "stool_water_fraction": {
+      "description": "Water fraction of firm stool.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Stool Water Fraction",
+      "type": "number"
+    },
+    "synthetic": {
+      "description": "True when not derived from observed visits.",
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "visit_interval": {
+      "$ref": "#/$defs/LogNormal",
+      "description": "Time between visit starts, seconds."
+    }
+  },
+  "required": [
+    "cat_id",
+    "synthetic",
+    "observed_visits",
+    "paw_radius_m",
+    "source_height_m",
+    "visit_interval",
+    "inspect",
+    "dig_strokes",
+    "eliminate",
+    "cover_strokes",
+    "deposit_mass",
+    "p_abandon",
+    "p_skip_dig",
+    "p_repeat_dig",
+    "p_no_cover",
+    "p_urine",
+    "p_soft_stool",
+    "stool_water_fraction",
+    "box_weights",
+    "location_fraction",
+    "location_spread_m"
+  ],
+  "title": "CatProfile",
+  "type": "object"
+}

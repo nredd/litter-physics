@@ -1,0 +1,10 @@
+# SYNTHETIC sweep over friction and pellet count. Each job keeps its own wall
+# budget; the sweep-level budget only stops starting new jobs.
+base_request: household_basic.yaml
+label: friction-and-count
+seeds: [0, 1]
+axes:
+  - path: materials.friction
+    values: [0.3, 0.5]
+  - path: boxes.0.pellet_count
+    values: [12, 24]

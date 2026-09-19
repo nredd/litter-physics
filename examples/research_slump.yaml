@@ -1,0 +1,32 @@
+# SYNTHETIC VERIFICATION FIXTURE. Material parameters are placeholders with no
+# measured provenance; a run is `research_unvalidated` regardless of outcome.
+schema_version: 1
+mode: research
+seed: 7
+duration_s: 0.5
+dt_s: 0.0001
+record_interval_s: 0.01
+max_wall_time_s: 900.0
+boxes: []
+materials:
+  friction: 0.4
+  restitution: 0.2
+  normal_stiffness_n_m: 1000.0
+  water_capacity_ratio: 3.0
+  uptake_rate_s: 0.1
+  breakdown_rate_s: 0.01
+  evaporation_rate_s: 0.00001
+events: []
+research:
+  fixture: slump
+  grid_spacing_m: 0.005
+  domain_m: [0.06, 0.06, 0.06]
+  material: paste
+  density_kg_m3: 1000.0
+  young_modulus_pa: 1000.0
+  poisson_ratio: 0.2
+  yield_stress_pa: 30.0
+  consistency_pa_s_n: 10.0
+  flow_index: 0.6
+  initial_size_m: [0.02, 0.02, 0.02]
+  initial_velocity_m_s: [0.0, 0.0, 0.0]

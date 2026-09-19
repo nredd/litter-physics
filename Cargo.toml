@@ -15,3 +15,13 @@ missing_docs = "warn"
 [workspace.lints.clippy]
 all = "warn"
 pedantic = "warn"
+
+# Numerical regression fixtures execute many stable substeps. Optimize arithmetic
+# without disabling test-profile overflow checks or debug assertions.
+[profile.test]
+opt-level = 2
+
+# macOS 27 rejects dylibs whose LINKEDIT string table was misaligned by stripping.
+# Keep the linker output intact until rust-lang/rust#157750 is fixed upstream.
+[profile.release]
+strip = "none"

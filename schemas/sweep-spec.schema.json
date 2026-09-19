@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "SweepAxis": {
+      "additionalProperties": false,
+      "description": "One swept parameter.",
+      "properties": {
+        "path": {
+          "description": "Dotted path into the request, e.g. `materials.friction` or `boxes.0.pellet_count`.",
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "values": {
+          "description": "Values to substitute, in order.",
+          "items": {},
+          "minItems": 1,
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "values"
+      ],
+      "title": "SweepAxis",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Sweep definition loaded from YAML or JSON.",
+  "properties": {
+    "axes": {
+      "description": "Swept axes; grid product.",
+      "items": {
+        "$ref": "#/$defs/SweepAxis"
+      },
+      "minItems": 1,
+      "title": "Axes",
+      "type": "array"
+    },
+    "base_request": {
+      "description": "Path to the base request, relative to the spec.",
+      "title": "Base Request",
+      "type": "string"
+    },
+    "label": {
+      "default": "sweep",
+      "description": "Human label stored in the summary.",
+      "title": "Label",
+      "type": "string"
+    },
+    "seeds": {
+      "description": "Seed offsets added to the base seed.",
+      "items": {
+        "type": "integer"
+      },
+      "title": "Seeds",
+      "type": "array"
+    }
+  },
+  "required": [
+    "base_request",
+    "axes"
+  ],
+  "title": "SweepSpec",
+  "type": "object"
+}

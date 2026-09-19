@@ -1,0 +1,743 @@
+{
+  "$defs": {
+    "BoxCfg": {
+      "additionalProperties": false,
+      "description": "One sifting box with its pellet population.",
+      "properties": {
+        "drawer_depth_m": {
+          "description": "Drawer cavity depth below the plate in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Drawer Depth M",
+          "type": "number"
+        },
+        "id": {
+          "description": "Unique box identifier referenced by events.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "origin_m": {
+          "description": "World position of the box minimum corner in metres.",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Origin M",
+          "type": "array"
+        },
+        "pellet_count": {
+          "description": "Intact pellets.",
+          "maximum": 200000,
+          "minimum": 0,
+          "title": "Pellet Count",
+          "type": "integer"
+        },
+        "pellet_density_kg_m3": {
+          "description": "Pellet bulk density in kg/m^3.",
+          "exclusiveMinimum": 0,
+          "title": "Pellet Density Kg M3",
+          "type": "number"
+        },
+        "pellet_length_m": {
+          "description": "Cylindrical pellet length in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Pellet Length M",
+          "type": "number"
+        },
+        "pellet_radius_m": {
+          "description": "Cylindrical pellet radius in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Pellet Radius M",
+          "type": "number"
+        },
+        "size_m": {
+          "description": "Inner box dimensions (x, y, z) in metres.",
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Size M",
+          "type": "array"
+        },
+        "slot_length_m": {
+          "description": "Sifting slot length in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Slot Length M",
+          "type": "number"
+        },
+        "slot_pitch_m": {
+          "description": "Centre-to-centre slot spacing in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Slot Pitch M",
+          "type": "number"
+        },
+        "slot_width_m": {
+          "description": "Sifting slot width in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Slot Width M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "size_m",
+        "origin_m",
+        "slot_width_m",
+        "slot_length_m",
+        "slot_pitch_m",
+        "drawer_depth_m",
+        "pellet_count",
+        "pellet_radius_m",
+        "pellet_length_m",
+        "pellet_density_kg_m3"
+      ],
+      "title": "BoxCfg",
+      "type": "object"
+    },
+    "Checkpoint": {
+      "additionalProperties": false,
+      "description": "Resumable native checkpoint.",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/Mode",
+          "description": "Mode that produced the state."
+        },
+        "request": {
+          "$ref": "#/$defs/SimulationRequest",
+          "description": "The original complete request."
+        },
+        "schema_version": {
+          "description": "Checkpoint schema version.",
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "state": {
+          "additionalProperties": true,
+          "description": "Mode-private opaque state.",
+          "title": "State",
+          "type": "object"
+        },
+        "time_s": {
+          "description": "Absolute simulation time reached.",
+          "minimum": 0,
+          "title": "Time S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "schema_version",
+        "mode",
+        "request",
+        "time_s",
+        "state"
+      ],
+      "title": "Checkpoint",
+      "type": "object"
+    },
+    "Compartment": {
+      "description": "Conservation ledger compartments.",
+      "enum": [
+        "bed",
+        "drawer",
+        "floor",
+        "removed",
+        "evaporated",
+        "domain",
+        "outflow"
+      ],
+      "title": "Compartment",
+      "type": "string"
+    },
+    "EventCfg": {
+      "additionalProperties": false,
+      "description": "One scheduled household event, positioned in box-local coordinates.",
+      "properties": {
+        "amount_kg": {
+          "description": "Deposited or removed mass in kilograms.",
+          "minimum": 0,
+          "title": "Amount Kg",
+          "type": "number"
+        },
+        "box_id": {
+          "description": "Target box identifier.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Box Id",
+          "type": "string"
+        },
+        "direction": {
+          "description": "Motion or deposition direction; nonzero for motion.",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Direction",
+          "type": "array"
+        },
+        "duration_s": {
+          "description": "Event duration in seconds; zero for passive.",
+          "minimum": 0,
+          "title": "Duration S",
+          "type": "number"
+        },
+        "kind": {
+          "$ref": "#/$defs/EventKind",
+          "description": "Event kind."
+        },
+        "position_m": {
+          "description": "Box-local event position in metres.",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Position M",
+          "type": "array"
+        },
+        "radius_m": {
+          "description": "Radius of influence in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Radius M",
+          "type": "number"
+        },
+        "time_s": {
+          "description": "Absolute simulation time of the event in seconds.",
+          "minimum": 0,
+          "title": "Time S",
+          "type": "number"
+        },
+        "water_fraction": {
+          "description": "Mass fraction that is mobile water.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Water Fraction",
+          "type": "number"
+        }
+      },
+      "required": [
+        "time_s",
+        "kind",
+        "box_id",
+        "position_m",
+        "direction",
+        "duration_s",
+        "amount_kg",
+        "water_fraction",
+        "radius_m"
+      ],
+      "title": "EventCfg",
+      "type": "object"
+    },
+    "EventKind": {
+      "description": "Household event kinds accepted by the wire contract.",
+      "enum": [
+        "urinate",
+        "defecate",
+        "dig",
+        "cover",
+        "stir",
+        "scoop",
+        "empty_drawer",
+        "refill",
+        "clean"
+      ],
+      "title": "EventKind",
+      "type": "string"
+    },
+    "Fidelity": {
+      "description": "Honesty label carried by every native output.",
+      "enum": [
+        "preliminary_household",
+        "research_unvalidated"
+      ],
+      "title": "Fidelity",
+      "type": "string"
+    },
+    "Fixture": {
+      "description": "Research fixture names.",
+      "enum": [
+        "slump",
+        "hydrostatic",
+        "dam_break",
+        "coupled_patch"
+      ],
+      "title": "Fixture",
+      "type": "string"
+    },
+    "Frame": {
+      "additionalProperties": false,
+      "description": "One recorded particle snapshot.",
+      "properties": {
+        "box_ids": {
+          "description": "Owning box per particle.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Box Ids",
+          "type": "array"
+        },
+        "materials": {
+          "description": "Material label per particle.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Materials",
+          "type": "array"
+        },
+        "positions_m": {
+          "description": "World-space particle centres in metres, including box origins.",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "title": "Positions M",
+          "type": "array"
+        },
+        "radii_m": {
+          "description": "Particle radii in metres.",
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "title": "Radii M",
+          "type": "array"
+        },
+        "time_s": {
+          "description": "Absolute simulation time in seconds.",
+          "minimum": 0,
+          "title": "Time S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "time_s",
+        "positions_m",
+        "radii_m",
+        "materials",
+        "box_ids"
+      ],
+      "title": "Frame",
+      "type": "object"
+    },
+    "Material": {
+      "description": "Research continuum material names.",
+      "enum": [
+        "paste",
+        "water",
+        "fines"
+      ],
+      "title": "Material",
+      "type": "string"
+    },
+    "MaterialsCfg": {
+      "additionalProperties": false,
+      "description": "Household reduced-model material parameters.",
+      "properties": {
+        "breakdown_rate_s": {
+          "description": "Moisture-driven breakup rate in 1/s.",
+          "minimum": 0,
+          "title": "Breakdown Rate S",
+          "type": "number"
+        },
+        "evaporation_rate_s": {
+          "description": "Free-water evaporation rate in 1/s.",
+          "minimum": 0,
+          "title": "Evaporation Rate S",
+          "type": "number"
+        },
+        "friction": {
+          "description": "Coulomb friction coefficient.",
+          "minimum": 0,
+          "title": "Friction",
+          "type": "number"
+        },
+        "normal_stiffness_n_m": {
+          "description": "Contact normal stiffness in N/m.",
+          "exclusiveMinimum": 0,
+          "title": "Normal Stiffness N M",
+          "type": "number"
+        },
+        "restitution": {
+          "description": "Normal restitution coefficient.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Restitution",
+          "type": "number"
+        },
+        "uptake_rate_s": {
+          "description": "First-order water uptake rate in 1/s.",
+          "minimum": 0,
+          "title": "Uptake Rate S",
+          "type": "number"
+        },
+        "water_capacity_ratio": {
+          "description": "Water mass per dry wood mass at saturation.",
+          "exclusiveMinimum": 0,
+          "title": "Water Capacity Ratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "friction",
+        "restitution",
+        "normal_stiffness_n_m",
+        "water_capacity_ratio",
+        "uptake_rate_s",
+        "breakdown_rate_s",
+        "evaporation_rate_s"
+      ],
+      "title": "MaterialsCfg",
+      "type": "object"
+    },
+    "MetricRow": {
+      "additionalProperties": false,
+      "description": "One conservation-ledger sample.",
+      "properties": {
+        "compartment": {
+          "$ref": "#/$defs/Compartment",
+          "description": "Ledger compartment."
+        },
+        "time_s": {
+          "description": "Absolute simulation time in seconds.",
+          "minimum": 0,
+          "title": "Time S",
+          "type": "number"
+        },
+        "waste_kg": {
+          "description": "Deposit solids in kilograms.",
+          "minimum": 0,
+          "title": "Waste Kg",
+          "type": "number"
+        },
+        "water_kg": {
+          "description": "Water, counted once across phases.",
+          "minimum": 0,
+          "title": "Water Kg",
+          "type": "number"
+        },
+        "wood_kg": {
+          "description": "Dry wood solids in kilograms.",
+          "minimum": 0,
+          "title": "Wood Kg",
+          "type": "number"
+        }
+      },
+      "required": [
+        "time_s",
+        "compartment",
+        "wood_kg",
+        "waste_kg",
+        "water_kg"
+      ],
+      "title": "MetricRow",
+      "type": "object"
+    },
+    "Mode": {
+      "description": "Simulation mode selecting the numerical model family.",
+      "enum": [
+        "household",
+        "research"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "ResearchCfg": {
+      "additionalProperties": false,
+      "description": "Research fixture configuration for the MPM solver.",
+      "properties": {
+        "consistency_pa_s_n": {
+          "description": "Consistency index in Pa s^n.",
+          "minimum": 0,
+          "title": "Consistency Pa S N",
+          "type": "number"
+        },
+        "density_kg_m3": {
+          "description": "Reference density in kg/m^3.",
+          "exclusiveMinimum": 0,
+          "title": "Density Kg M3",
+          "type": "number"
+        },
+        "domain_m": {
+          "description": "Domain extent in metres.",
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Domain M",
+          "type": "array"
+        },
+        "fixture": {
+          "$ref": "#/$defs/Fixture",
+          "description": "Verification fixture name."
+        },
+        "flow_index": {
+          "description": "Flow index n.",
+          "exclusiveMinimum": 0,
+          "title": "Flow Index",
+          "type": "number"
+        },
+        "grid_spacing_m": {
+          "description": "Background grid spacing in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Grid Spacing M",
+          "type": "number"
+        },
+        "initial_size_m": {
+          "description": "Initial material block size in metres.",
+          "items": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Initial Size M",
+          "type": "array"
+        },
+        "initial_velocity_m_s": {
+          "description": "Initial material velocity in m/s.",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "title": "Initial Velocity M S",
+          "type": "array"
+        },
+        "material": {
+          "$ref": "#/$defs/Material",
+          "description": "Continuum material model."
+        },
+        "poisson_ratio": {
+          "description": "Poisson ratio, below the incompressible limit.",
+          "exclusiveMaximum": 0.5,
+          "minimum": 0,
+          "title": "Poisson Ratio",
+          "type": "number"
+        },
+        "yield_stress_pa": {
+          "description": "Herschel-Bulkley yield stress in Pa.",
+          "minimum": 0,
+          "title": "Yield Stress Pa",
+          "type": "number"
+        },
+        "young_modulus_pa": {
+          "description": "Elastic modulus in pascals.",
+          "exclusiveMinimum": 0,
+          "title": "Young Modulus Pa",
+          "type": "number"
+        }
+      },
+      "required": [
+        "fixture",
+        "grid_spacing_m",
+        "domain_m",
+        "material",
+        "density_kg_m3",
+        "young_modulus_pa",
+        "poisson_ratio",
+        "yield_stress_pa",
+        "consistency_pa_s_n",
+        "flow_index",
+        "initial_size_m",
+        "initial_velocity_m_s"
+      ],
+      "title": "ResearchCfg",
+      "type": "object"
+    },
+    "SimulationRequest": {
+      "additionalProperties": false,
+      "description": "Complete validated native request.",
+      "properties": {
+        "boxes": {
+          "description": "Sifting boxes; at least one in household mode.",
+          "items": {
+            "$ref": "#/$defs/BoxCfg"
+          },
+          "maxItems": 16,
+          "title": "Boxes",
+          "type": "array"
+        },
+        "dt_s": {
+          "description": "Nominal timestep in seconds.",
+          "exclusiveMinimum": 0,
+          "title": "Dt S",
+          "type": "number"
+        },
+        "duration_s": {
+          "description": "Simulated duration in seconds.",
+          "exclusiveMinimum": 0,
+          "title": "Duration S",
+          "type": "number"
+        },
+        "events": {
+          "description": "Time-ordered household events.",
+          "items": {
+            "$ref": "#/$defs/EventCfg"
+          },
+          "maxItems": 100000,
+          "title": "Events",
+          "type": "array"
+        },
+        "materials": {
+          "$ref": "#/$defs/MaterialsCfg",
+          "description": "Household material parameters."
+        },
+        "max_wall_time_s": {
+          "description": "Native wall-clock budget in seconds; at most one hour.",
+          "exclusiveMinimum": 0,
+          "maximum": 3600.0,
+          "title": "Max Wall Time S",
+          "type": "number"
+        },
+        "mode": {
+          "$ref": "#/$defs/Mode",
+          "description": "Simulation mode."
+        },
+        "record_interval_s": {
+          "description": "Frame recording interval in seconds.",
+          "exclusiveMinimum": 0,
+          "title": "Record Interval S",
+          "type": "number"
+        },
+        "research": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResearchCfg"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Research fixture; required in research mode."
+        },
+        "schema_version": {
+          "description": "Wire schema version.",
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "seed": {
+          "description": "Unsigned 64-bit master seed.",
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "mode",
+        "seed",
+        "duration_s",
+        "dt_s",
+        "record_interval_s",
+        "max_wall_time_s",
+        "boxes",
+        "materials",
+        "events",
+        "research"
+      ],
+      "title": "SimulationRequest",
+      "type": "object"
+    },
+    "Status": {
+      "description": "Native completion status.",
+      "enum": [
+        "completed",
+        "budget_exhausted"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Complete native output for one execution segment.",
+  "properties": {
+    "checkpoint": {
+      "$ref": "#/$defs/Checkpoint",
+      "description": "State to resume from."
+    },
+    "diagnostics": {
+      "description": "Human-readable diagnostics.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "fidelity": {
+      "$ref": "#/$defs/Fidelity",
+      "description": "Honesty label for the numerical model."
+    },
+    "frames": {
+      "description": "Recorded frames for this segment only.",
+      "items": {
+        "$ref": "#/$defs/Frame"
+      },
+      "title": "Frames",
+      "type": "array"
+    },
+    "metrics": {
+      "description": "Ledger samples for this segment only.",
+      "items": {
+        "$ref": "#/$defs/MetricRow"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "mode": {
+      "$ref": "#/$defs/Mode",
+      "description": "Simulation mode."
+    },
+    "observables": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "description": "Scalar summary observables.",
+      "title": "Observables",
+      "type": "object"
+    },
+    "schema_version": {
+      "description": "Wire schema version.",
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "$ref": "#/$defs/Status",
+      "description": "Completion status; never fakes completion."
+    },
+    "time_s": {
+      "description": "Absolute simulation time reached.",
+      "minimum": 0,
+      "title": "Time S",
+      "type": "number"
+    }
+  },
+  "required": [
+    "schema_version",
+    "mode",
+    "status",
+    "fidelity",
+    "time_s",
+    "frames",
+    "metrics",
+    "observables",
+    "diagnostics",
+    "checkpoint"
+  ],
+  "title": "SimulationOutput",
+  "type": "object"
+}

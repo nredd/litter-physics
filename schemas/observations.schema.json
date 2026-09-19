@@ -1,0 +1,747 @@
+{
+  "$defs": {
+    "AdhesionGroup": {
+      "additionalProperties": false,
+      "description": "Adhesion measurements.",
+      "properties": {
+        "instrument_uncertainty": {
+          "description": "Absolute instrument uncertainty in the group's primary unit.",
+          "minimum": 0,
+          "title": "Instrument Uncertainty",
+          "type": "number"
+        },
+        "samples": {
+          "description": "Trials.",
+          "items": {
+            "$ref": "#/$defs/AdhesionSample"
+          },
+          "minItems": 1,
+          "title": "Samples",
+          "type": "array"
+        },
+        "source": {
+          "description": "Instrument, protocol, or citation.",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "description": "Provenance status of the samples."
+        }
+      },
+      "required": [
+        "status",
+        "source",
+        "instrument_uncertainty",
+        "samples"
+      ],
+      "title": "AdhesionGroup",
+      "type": "object"
+    },
+    "AdhesionSample": {
+      "additionalProperties": false,
+      "description": "Traction-separation measurement against a substrate.",
+      "properties": {
+        "peak_traction_pa": {
+          "description": "Peak traction in Pa.",
+          "exclusiveMinimum": 0,
+          "title": "Peak Traction Pa",
+          "type": "number"
+        },
+        "separation_m": {
+          "description": "Separation at full detachment in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Separation M",
+          "type": "number"
+        },
+        "substrate": {
+          "description": "Substrate label, e.g. `steel` or `wood`.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Substrate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "substrate",
+        "peak_traction_pa",
+        "separation_m"
+      ],
+      "title": "AdhesionSample",
+      "type": "object"
+    },
+    "BreakupGroup": {
+      "additionalProperties": false,
+      "description": "Breakup measurements.",
+      "properties": {
+        "instrument_uncertainty": {
+          "description": "Absolute instrument uncertainty in the group's primary unit.",
+          "minimum": 0,
+          "title": "Instrument Uncertainty",
+          "type": "number"
+        },
+        "samples": {
+          "description": "Repeatable trials.",
+          "items": {
+            "$ref": "#/$defs/BreakupSample"
+          },
+          "minItems": 2,
+          "title": "Samples",
+          "type": "array"
+        },
+        "source": {
+          "description": "Instrument, protocol, or citation.",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "description": "Provenance status of the samples."
+        }
+      },
+      "required": [
+        "status",
+        "source",
+        "instrument_uncertainty",
+        "samples"
+      ],
+      "title": "BreakupGroup",
+      "type": "object"
+    },
+    "BreakupSample": {
+      "additionalProperties": false,
+      "description": "Disturbance-driven breakup measurement.",
+      "properties": {
+        "broken_fraction": {
+          "description": "Mass fraction below the pellet threshold after standardized agitation.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Broken Fraction",
+          "type": "number"
+        },
+        "exposure_s": {
+          "description": "Wet exposure time in seconds.",
+          "minimum": 0,
+          "title": "Exposure S",
+          "type": "number"
+        },
+        "water_mass_ratio": {
+          "description": "Water per dry mass during exposure.",
+          "minimum": 0,
+          "title": "Water Mass Ratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "exposure_s",
+        "water_mass_ratio",
+        "broken_fraction"
+      ],
+      "title": "BreakupSample",
+      "type": "object"
+    },
+    "DryPourGroup": {
+      "additionalProperties": false,
+      "description": "Dry pour and repose measurements.",
+      "properties": {
+        "instrument_uncertainty": {
+          "description": "Absolute instrument uncertainty in the group's primary unit.",
+          "minimum": 0,
+          "title": "Instrument Uncertainty",
+          "type": "number"
+        },
+        "samples": {
+          "description": "Repeat pours.",
+          "items": {
+            "$ref": "#/$defs/DryPourSample"
+          },
+          "minItems": 1,
+          "title": "Samples",
+          "type": "array"
+        },
+        "source": {
+          "description": "Instrument, protocol, or citation.",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "description": "Provenance status of the samples."
+        }
+      },
+      "required": [
+        "status",
+        "source",
+        "instrument_uncertainty",
+        "samples"
+      ],
+      "title": "DryPourGroup",
+      "type": "object"
+    },
+    "DryPourSample": {
+      "additionalProperties": false,
+      "description": "Poured pellet mass, volume, and repose angle.",
+      "properties": {
+        "mass_kg": {
+          "description": "Poured dry mass in kilograms.",
+          "exclusiveMinimum": 0,
+          "title": "Mass Kg",
+          "type": "number"
+        },
+        "repose_angle_deg": {
+          "description": "Angle of repose in degrees.",
+          "exclusiveMaximum": 90,
+          "exclusiveMinimum": 0,
+          "title": "Repose Angle Deg",
+          "type": "number"
+        },
+        "volume_m3": {
+          "description": "Settled bulk volume in cubic metres.",
+          "exclusiveMinimum": 0,
+          "title": "Volume M3",
+          "type": "number"
+        }
+      },
+      "required": [
+        "mass_kg",
+        "volume_m3",
+        "repose_angle_deg"
+      ],
+      "title": "DryPourSample",
+      "type": "object"
+    },
+    "EliminationKind": {
+      "description": "Observed deposit kind.",
+      "enum": [
+        "urine",
+        "firm_stool",
+        "soft_stool",
+        "liquid_stool",
+        "none"
+      ],
+      "title": "EliminationKind",
+      "type": "string"
+    },
+    "FlowGroup": {
+      "additionalProperties": false,
+      "description": "Multi-rate flow curve for Herschel-Bulkley fitting.",
+      "properties": {
+        "instrument_uncertainty": {
+          "description": "Absolute instrument uncertainty in the group's primary unit.",
+          "minimum": 0,
+          "title": "Instrument Uncertainty",
+          "type": "number"
+        },
+        "samples": {
+          "description": "At least four rates.",
+          "items": {
+            "$ref": "#/$defs/FlowSample"
+          },
+          "minItems": 4,
+          "title": "Samples",
+          "type": "array"
+        },
+        "source": {
+          "description": "Instrument, protocol, or citation.",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "description": "Provenance status of the samples."
+        }
+      },
+      "required": [
+        "status",
+        "source",
+        "instrument_uncertainty",
+        "samples"
+      ],
+      "title": "FlowGroup",
+      "type": "object"
+    },
+    "FlowSample": {
+      "additionalProperties": false,
+      "description": "Steady shear rheometry point.",
+      "properties": {
+        "shear_rate_1_s": {
+          "description": "Applied shear rate in 1/s.",
+          "exclusiveMinimum": 0,
+          "title": "Shear Rate 1 S",
+          "type": "number"
+        },
+        "shear_stress_pa": {
+          "description": "Measured shear stress in Pa.",
+          "exclusiveMinimum": 0,
+          "title": "Shear Stress Pa",
+          "type": "number"
+        }
+      },
+      "required": [
+        "shear_rate_1_s",
+        "shear_stress_pa"
+      ],
+      "title": "FlowSample",
+      "type": "object"
+    },
+    "MaintenanceKind": {
+      "description": "Maintenance action kinds.",
+      "enum": [
+        "scoop",
+        "stir",
+        "empty_drawer",
+        "refill",
+        "clean"
+      ],
+      "title": "MaintenanceKind",
+      "type": "string"
+    },
+    "MaintenanceObservation": {
+      "additionalProperties": false,
+      "description": "One maintenance action with weighed masses.",
+      "properties": {
+        "added_mass_kg": {
+          "description": "Mass added for refill or clean.",
+          "minimum": 0,
+          "title": "Added Mass Kg",
+          "type": "number"
+        },
+        "box_id": {
+          "description": "Box acted on.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Box Id",
+          "type": "string"
+        },
+        "clean_litter_loss_kg": {
+          "description": "Clean pellets removed alongside.",
+          "minimum": 0,
+          "title": "Clean Litter Loss Kg",
+          "type": "number"
+        },
+        "kind": {
+          "$ref": "#/$defs/MaintenanceKind",
+          "description": "Action kind."
+        },
+        "removed_mass_kg": {
+          "description": "Mass removed, weighed.",
+          "minimum": 0,
+          "title": "Removed Mass Kg",
+          "type": "number"
+        },
+        "time_s": {
+          "description": "Action time relative to the log origin.",
+          "minimum": 0,
+          "title": "Time S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "time_s",
+        "kind",
+        "box_id",
+        "removed_mass_kg",
+        "clean_litter_loss_kg",
+        "added_mass_kg"
+      ],
+      "title": "MaintenanceObservation",
+      "type": "object"
+    },
+    "MaterialObservations": {
+      "additionalProperties": false,
+      "description": "All material test groups; any may be absent.",
+      "properties": {
+        "adhesion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdhesionGroup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Adhesion tests."
+        },
+        "breakup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BreakupGroup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Breakup trials."
+        },
+        "dry_pour": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DryPourGroup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dry pour tests."
+        },
+        "flow_curve": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlowGroup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rheometry points."
+        },
+        "slump": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SlumpGroup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Slump tests."
+        },
+        "uptake": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UptakeGroup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Uptake series."
+        }
+      },
+      "title": "MaterialObservations",
+      "type": "object"
+    },
+    "Provenance": {
+      "description": "Where a number comes from.",
+      "enum": [
+        "measured",
+        "literature_prior",
+        "assumed"
+      ],
+      "title": "Provenance",
+      "type": "string"
+    },
+    "SlumpGroup": {
+      "additionalProperties": false,
+      "description": "Slump tests on the clean surrogate paste.",
+      "properties": {
+        "instrument_uncertainty": {
+          "description": "Absolute instrument uncertainty in the group's primary unit.",
+          "minimum": 0,
+          "title": "Instrument Uncertainty",
+          "type": "number"
+        },
+        "samples": {
+          "description": "Repeat tests.",
+          "items": {
+            "$ref": "#/$defs/SlumpSample"
+          },
+          "minItems": 1,
+          "title": "Samples",
+          "type": "array"
+        },
+        "source": {
+          "description": "Instrument, protocol, or citation.",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "description": "Provenance status of the samples."
+        }
+      },
+      "required": [
+        "status",
+        "source",
+        "instrument_uncertainty",
+        "samples"
+      ],
+      "title": "SlumpGroup",
+      "type": "object"
+    },
+    "SlumpSample": {
+      "additionalProperties": false,
+      "description": "Single slump test result.",
+      "properties": {
+        "final_height_m": {
+          "description": "Slumped height in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Final Height M",
+          "type": "number"
+        },
+        "initial_height_m": {
+          "description": "Cylinder height in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Initial Height M",
+          "type": "number"
+        },
+        "spread_m": {
+          "description": "Final spread diameter in metres.",
+          "exclusiveMinimum": 0,
+          "title": "Spread M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "initial_height_m",
+        "final_height_m",
+        "spread_m"
+      ],
+      "title": "SlumpSample",
+      "type": "object"
+    },
+    "UptakeGroup": {
+      "additionalProperties": false,
+      "description": "Uptake and swelling series.",
+      "properties": {
+        "instrument_uncertainty": {
+          "description": "Absolute instrument uncertainty in the group's primary unit.",
+          "minimum": 0,
+          "title": "Instrument Uncertainty",
+          "type": "number"
+        },
+        "samples": {
+          "description": "Time-ordered points.",
+          "items": {
+            "$ref": "#/$defs/UptakeSample"
+          },
+          "minItems": 2,
+          "title": "Samples",
+          "type": "array"
+        },
+        "source": {
+          "description": "Instrument, protocol, or citation.",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Provenance",
+          "description": "Provenance status of the samples."
+        }
+      },
+      "required": [
+        "status",
+        "source",
+        "instrument_uncertainty",
+        "samples"
+      ],
+      "title": "UptakeGroup",
+      "type": "object"
+    },
+    "UptakeSample": {
+      "additionalProperties": false,
+      "description": "Water uptake time series point.",
+      "properties": {
+        "swelling_ratio": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Volume ratio to dry volume when measured.",
+          "title": "Swelling Ratio"
+        },
+        "time_s": {
+          "description": "Immersion or exposure time in seconds.",
+          "minimum": 0,
+          "title": "Time S",
+          "type": "number"
+        },
+        "water_mass_ratio": {
+          "description": "Absorbed water mass per dry mass.",
+          "minimum": 0,
+          "title": "Water Mass Ratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "time_s",
+        "water_mass_ratio"
+      ],
+      "title": "UptakeSample",
+      "type": "object"
+    },
+    "VisitObservation": {
+      "additionalProperties": false,
+      "description": "One annotated visit.",
+      "properties": {
+        "abandoned": {
+          "description": "True when the cat left before eliminating.",
+          "title": "Abandoned",
+          "type": "boolean"
+        },
+        "box_id": {
+          "description": "Box used.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Box Id",
+          "type": "string"
+        },
+        "cat_id": {
+          "description": "Observed cat identifier.",
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "title": "Cat Id",
+          "type": "string"
+        },
+        "cover_s": {
+          "description": "Covering duration; zero when skipped.",
+          "minimum": 0,
+          "title": "Cover S",
+          "type": "number"
+        },
+        "cover_strokes": {
+          "description": "Counted covering strokes.",
+          "minimum": 0,
+          "title": "Cover Strokes",
+          "type": "integer"
+        },
+        "deposit_mass_kg": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Measured deposit mass when available.",
+          "title": "Deposit Mass Kg"
+        },
+        "dig_s": {
+          "description": "Total digging time.",
+          "minimum": 0,
+          "title": "Dig S",
+          "type": "number"
+        },
+        "dig_strokes": {
+          "description": "Counted digging strokes.",
+          "minimum": 0,
+          "title": "Dig Strokes",
+          "type": "integer"
+        },
+        "eliminate_s": {
+          "description": "Elimination duration.",
+          "minimum": 0,
+          "title": "Eliminate S",
+          "type": "number"
+        },
+        "elimination": {
+          "$ref": "#/$defs/EliminationKind",
+          "description": "Deposit kind, `none` if aborted."
+        },
+        "inspect_s": {
+          "description": "Time inspecting before digging.",
+          "minimum": 0,
+          "title": "Inspect S",
+          "type": "number"
+        },
+        "start_s": {
+          "description": "Visit start relative to the log origin.",
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "cat_id",
+        "box_id",
+        "start_s",
+        "inspect_s",
+        "dig_s",
+        "dig_strokes",
+        "elimination",
+        "eliminate_s",
+        "cover_s",
+        "cover_strokes",
+        "abandoned"
+      ],
+      "title": "VisitObservation",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Top-level observation file.",
+  "properties": {
+    "description": {
+      "description": "What was observed and how.",
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "maintenance": {
+      "description": "Weighed maintenance.",
+      "items": {
+        "$ref": "#/$defs/MaintenanceObservation"
+      },
+      "title": "Maintenance",
+      "type": "array"
+    },
+    "materials": {
+      "$ref": "#/$defs/MaterialObservations",
+      "description": "Material tests."
+    },
+    "schema_version": {
+      "description": "Observation schema version.",
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "synthetic": {
+      "description": "True when generated, never measured.",
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "visits": {
+      "description": "Annotated visits.",
+      "items": {
+        "$ref": "#/$defs/VisitObservation"
+      },
+      "title": "Visits",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "description",
+    "materials",
+    "visits",
+    "maintenance"
+  ],
+  "title": "ObservationSet",
+  "type": "object"
+}

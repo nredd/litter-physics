@@ -146,7 +146,8 @@ schema_version; breaking changes increment it.
 Status enum: `completed`, `budget_exhausted`. Numerical errors return an error, not
 fake completion. Fidelity: `preliminary_household` or `research_unvalidated` until
 explicit release evidence exists. All output arrays must be finite. Frame arrays have
-equal lengths. Metrics use compartments `bed`, `drawer`, `floor`, `removed`, `evaporated`;
+equal lengths. Frame positions are WORLD coordinates, including box origins;
+only event positions are box-local. Metrics use compartments `bed`, `drawer`, `floor`, `removed`, `evaporated`;
 research may use `domain` and `outflow`. Include zeros where useful. Water in solid and
 liquid phases must not be counted twice. Numerical models document omitted outputs.
 

@@ -1,14 +1,33 @@
 # Implementation status
 
-- Foundation: installed native extension, protocol version, non-mutating gate.
-- Response tables: strict schemas, finite-grid multilinear interpolation, bounded
-  opt-in exploration, evidence acceptance policy. No physical tables shipped and
-  no solver integration yet.
-- Dry mechanics: not implemented.
-- Reduced household model: not implemented.
-- Research MPM and two-way coupling: not implemented.
-- Personalization, calibration, and browser replay: not implemented.
-- Measured material/household validation: blocked on user measurements.
+This is the first executable milestone, NOT completion of `plan.md`.
 
-Inspected development host: Apple M4 Mac mini, 10 cores, 16 GB memory. This is a
-hardware observation, not a performance claim.
+Implemented and exercised:
+- Private repository, native extension, locked dependencies, shared wire contract,
+  strict schemas and non-mutating lint/type/test gates.
+- Dry oriented-pellet mechanics and conservative preliminary maintenance runs.
+- Single-phase paste/liquid MPM primitives and a two-way single-pellet fixture.
+- CLI, JSON checkpoints, immutable artifact segments, Parquet, loopback browser serving,
+  recording verification, build-compatible resume and explicit budget/deadline outcomes.
+- Synthetic observation import, identifiable curve fits, duration-only personalization
+  scoring, visit-stage generation, sweeps and benchmarks.
+- Standalone response-table validation/interpolation with bounded exploration and
+  fail-closed evidence policy. No physical response tables are shipped.
+
+Required work still outstanding:
+- Complete research porous fines, absorption, wet breakup and adhesion with independent
+  verification, refinement studies and coupled momentum/work/leakage acceptance.
+- Generate and validate research response tables; consume them in the native household
+  model. Current household paste does not spread or push pellets.
+- Add calibrated geometry (entrance/enclosure/pads), settled beds, actual stroke replay,
+  behavior-to-native event generation, exposure/burial metrics and adaptive idle evolution.
+- Validate material/surrogate measurements, held-out maintenance cycles, per-cat profiles,
+  numerical convergence and actual-size-box runtime on the intended hardware.
+
+Input blockers: actual box/pellet measurements, cats' identities/habits/videos,
+maintenance logs and clean-surrogate experiments. See `measurements.md`.
+
+Runtime results for the tiny synthetic demos are recorded in `validation.md`. They are
+not representative full-box benchmarks. Native feasibility caps remain deliberately
+explicit. Independent numerical review of the integrated MPM implementation remains
+outstanding; conservation unit tests alone are not a research-grade release gate.

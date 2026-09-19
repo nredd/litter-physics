@@ -25,6 +25,9 @@ dev = [
     "tox-uv>=1.36.0",
 ]
 
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }, { file = "core/Cargo.toml" }, { file = "core/**/*.rs" }]
+
 [tool.maturin]
 manifest-path = "core/Cargo.toml"
 python-source = "python"
@@ -53,4 +56,4 @@ env_list = ["py312", "py313", "py314"]
 runner = "uv-venv-runner"
 description = "Run Python integration tests"
 deps = ["pytest", "jsonschema"]
-commands = [["pytest", "{posargs:tests}"]]
+commands = [["pytest", "--require-native", "{posargs:tests}"]]

@@ -36,3 +36,49 @@ a future native table consumer must preserve the same domain/evidence contract.
 No measured geometry, pellet tests, cat observations, surrogate rheology, held-out
 maintenance cycle, converged MPM study, or full simulation runtime acceptance has
 been supplied or accepted yet. Numerical modules are undergoing separate integration.
+
+## Initial native integration
+
+Executed on the same M4/16 GB host, macOS 27.0:
+
+```text
+maintenance_smoke: 2 tiny boxes, 8 initial pellets, 7 events, 0.2 simulated seconds
+wall_time_s=0.291861417  mass_residual_kg=6.505213e-19
+household_basic: 2 tiny boxes, 48 initial pellets, 1 simulated second
+wall_time_s=2.857846542  mass_residual_kg=3.469447e-18
+research_slump: 512 material points, 5000 steps, 0.5 simulated seconds
+wall_time_s=0.874982125  mass_residual_kg=0
+momentum_residual_kg_m_s=8.326673e-17
+```
+
+These are actual compiled-kernel CLI runs, not mock tests. They establish execution,
+artifact generation and ledger checks only. The contact-overlap outputs are nonzero
+and have NOT met a stiffness/refinement acceptance study. No actual-size prediction
+or measured-material accuracy follows from the above timings/residuals.
+
+Real integration tests require both modes to complete, exercise real native checkpoint
+and JSON round trips, reject request drift, and verify exported Rerun files. Viewer
+checks fetch the loopback HTTP page and assert both ports close after shutdown. The
+browser's visual rendering has not been manually inspected. Synthetic calibration was
+run through the CLI and remained explicitly non-measured.
+
+Integration fixes:
+- Replace an incorrect permanent-empty drawer assertion with immediate inventory and
+  removed-mass conservation checks; subsequent wet-bed drainage is expected.
+- Start paw proxies above the bed rather than inside particles/floor.
+- Disable release stripping because Rust's stripping step generated a misaligned
+  Mach-O LINKEDIT string pool rejected by macOS 27. The unmodified linker image loads.
+  Upstream issue: [here](https://github.com/rust-lang/rust/issues/157750).
+- Enforce world coordinates and continuous recording identity, reap viewer children,
+  reject build/provenance drift on resume, and atomically refuse artifact overwrites.
+- Reject ambiguous/expanding configuration syntax and forged checkpoint field geometry.
+
+Native tests use an optimized test profile with debug assertions and overflow checks
+still enabled. This changes runtime cost, not numerical tolerances or gate coverage.
+
+Final integration gate: 73 native tests and 107 Python tests passed, no skips. Python
+coverage was 95%. Formatting, pedantic Clippy, ty, Rust docs and all schema checks were
+clean. Installed sdist/wheel tests also passed on Python 3.12, 3.13 and 3.14.
+
+The separate constitutive microbenchmark executed 10,000 real implicit paste updates:
+`mean_update_s=0.000000343`. This is a kernel-only timing, not a visit benchmark.

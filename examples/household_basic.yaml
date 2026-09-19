@@ -1,0 +1,78 @@
+# SYNTHETIC DEMO. Geometry and materials are placeholders, not measured inputs.
+# Nothing here establishes accuracy for a real household. See docs/calibration.md.
+schema_version: 1
+mode: household
+seed: 1
+duration_s: 1.0
+dt_s: 0.001
+record_interval_s: 0.05
+max_wall_time_s: 600.0
+boxes:
+  - id: box-a
+    size_m: [0.12, 0.10, 0.08]
+    origin_m: [0.0, 0.0, 0.0]
+    slot_width_m: 0.005
+    slot_length_m: 0.015
+    slot_pitch_m: 0.02
+    drawer_depth_m: 0.03
+    pellet_count: 24
+    pellet_radius_m: 0.003
+    pellet_length_m: 0.012
+    pellet_density_kg_m3: 1100.0
+  - id: box-b
+    size_m: [0.12, 0.10, 0.08]
+    origin_m: [0.20, 0.0, 0.0]
+    slot_width_m: 0.005
+    slot_length_m: 0.015
+    slot_pitch_m: 0.02
+    drawer_depth_m: 0.03
+    pellet_count: 24
+    pellet_radius_m: 0.003
+    pellet_length_m: 0.012
+    pellet_density_kg_m3: 1100.0
+materials:
+  friction: 0.4
+  restitution: 0.2
+  normal_stiffness_n_m: 1000.0
+  water_capacity_ratio: 3.0
+  uptake_rate_s: 0.1
+  breakdown_rate_s: 0.01
+  evaporation_rate_s: 0.00001
+events:
+  - time_s: 0.1
+    kind: dig
+    box_id: box-a
+    position_m: [0.05, 0.05, 0.02]
+    direction: [1.0, 0.0, -0.5]
+    duration_s: 0.2
+    amount_kg: 0.0
+    water_fraction: 0.0
+    radius_m: 0.01
+  - time_s: 0.4
+    kind: urinate
+    box_id: box-a
+    position_m: [0.06, 0.05, 0.02]
+    direction: [0.0, 0.0, -1.0]
+    duration_s: 0.1
+    amount_kg: 0.002
+    water_fraction: 1.0
+    radius_m: 0.015
+  - time_s: 0.6
+    kind: cover
+    box_id: box-a
+    position_m: [0.06, 0.05, 0.02]
+    direction: [-1.0, 0.0, 0.0]
+    duration_s: 0.2
+    amount_kg: 0.0
+    water_fraction: 0.0
+    radius_m: 0.01
+  - time_s: 0.9
+    kind: scoop
+    box_id: box-b
+    position_m: [0.06, 0.05, 0.02]
+    direction: [0.0, 0.0, 1.0]
+    duration_s: 0.05
+    amount_kg: 0.001
+    water_fraction: 0.0
+    radius_m: 0.02
+research: null
