@@ -243,8 +243,12 @@ impl Grid {
         self.active.clear();
     }
 
-    /// Accumulate mass and momentum at a node, registering it as active.
+    /// Accumulate nonzero weighted mass and momentum, registering the node once.
+    /// Zero-weight stencil entries carry no mass or momentum and remain inactive.
     pub fn deposit(&mut self, index: usize, mass: f64, momentum: Vector3<f64>) {
+        if mass == 0.0 {
+            return;
+        }
         if self.mass[index] == 0.0 {
             self.active.push(index);
         }

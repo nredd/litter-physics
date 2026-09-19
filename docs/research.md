@@ -66,3 +66,24 @@ timestep refinement study must reject nonzero `limited_steps` or `rejected_steps
 The counter is preserved in checkpoints and cannot exceed accepted `step_count`.
 Checkpoints lacking this history are rejected, not assigned a fabricated zero;
 Python also refuses restart across changed numerical builds.
+
+### Grid and restart integrity
+
+Zero-weight stencil entries do not register active nodes. Previously an exact half-cell
+particle could register a zero-mass node, then another particle registered it again;
+wall impulses were counted twice. `core/tests/grid_transfer.rs` reproduces the exact
+alignment and its perturbed control and checks unique nodes and momentum residual
+below 1e-18 kg m/s.
+
+All current wire fixtures are closed. Restored particles must have valid grid stencils,
+even when resuming a checkpoint already at its final time. At record boundaries and
+budget stops, the full particle/grid state is validated and nonzero outflow inventory
+is rejected. A balanced ledger does not make a wall leak acceptable. This guard catches
+escape beyond the padded grid; it does NOT establish watertight subcell boundaries.
+
+The first independent review also reported nonconvergent maximum hydrostatic errors
+at the bottom boundary and per-particle liquid pressure noise insensitive to timestep
+refinement. The initialization-only hydrostatic test is not a time-evolved accuracy
+check. No pressure smoothing, interior-only metric substitution, or material-law change
+has been made to hide these issues; liquid-pressure and full energy acceptance remain
+open. Energy-ledger semantics are being corrected separately.

@@ -124,6 +124,12 @@ fn corrupt_checkpoint_histories_and_requests_are_rejected() {
     let mut checkpoint = full["checkpoint"].clone();
     checkpoint["state"]["particles"]["mass"][0] = json!(-1);
     assert!(run(&input, Some(&checkpoint)).is_err());
+    let mut checkpoint = full["checkpoint"].clone();
+    checkpoint["state"]["particles"]["position"][0] = json!([100.0, 0.0, 0.0]);
+    assert!(
+        run(&input, Some(&checkpoint)).is_err(),
+        "accepted a completed checkpoint with a particle outside the grid"
+    );
     let mut changed = input.clone();
     changed["seed"] = json!(99);
     assert!(run(&changed, Some(&full["checkpoint"])).is_err());
@@ -138,6 +144,19 @@ fn budget_expiry_and_restoration_are_explicit() {
     input["max_wall_time_s"] = json!(60);
     let complete = run(&input, Some(&partial["checkpoint"])).expect("resume");
     assert_eq!(complete["status"], "completed");
+}
+
+#[test]
+fn balanced_outflow_is_not_valid_for_closed_research_fixtures() {
+    let typed: Request = serde_json::from_value(request()).expect("request");
+    let spec = specification(&typed).expect("spec");
+    let (mut sim, _) = spec.build().expect("build");
+    sim.ledger.outflow_mass += sim.particles.remove_sorted(&[0]);
+    assert!(sim.mass_residual().abs() < 1e-12);
+    assert!(
+        check_closed_state(&sim).is_err(),
+        "balanced ledger concealed a wall leak"
+    );
 }
 
 #[test]

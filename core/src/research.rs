@@ -94,12 +94,13 @@ pub fn run(request: &Value, resume: Option<&Value>) -> Result<Value, String> {
         if !reached {
             break;
         }
-        sim.particles.validate()?;
-        check_mass(&sim)?;
+        check_closed_state(&sim)?;
         record(&sim, &spec, &mut frames, &mut metrics);
         next_record += 1;
         completed = sim.time >= typed.duration_s;
     }
+    // Budget stops may occur between record boundaries; validate that state too.
+    check_closed_state(&sim)?;
     let checkpoint = Checkpoint {
         schema_version: 1,
         mode: "research".into(),
@@ -361,7 +362,7 @@ fn restore(
     sim.dt_scale = state.dt_scale;
     sim.min_dt_used = state.min_dt_used.unwrap_or(f64::INFINITY);
     sim.max_dt_used = state.max_dt_used;
-    check_mass(sim)?;
+    check_closed_state(sim)?;
     Ok(state.next_record_index)
 }
 
@@ -434,8 +435,15 @@ fn contains_null(value: &Value) -> bool {
     }
 }
 
-/// Enforce the single-phase continuum mass ledger independently of visualization.
-fn check_mass(sim: &Simulation) -> Result<(), String> {
+/// Check representable state and closed-fixture inventory, including on restart.
+fn check_closed_state(sim: &Simulation) -> Result<(), String> {
+    sim.validate().map_err(|e| e.to_string())?;
+    if !sim.ledger.outflow_mass.is_finite() || sim.ledger.outflow_mass.abs() > 0.0 {
+        return Err(format!(
+            "closed research fixture leaked '{}' kg beyond the padded grid",
+            sim.ledger.outflow_mass
+        ));
+    }
     let residual = sim.mass_residual();
     if !residual.is_finite() || residual.abs() > (1e-6 * sim.ledger.initial_mass).max(1e-12) {
         return Err(format!(

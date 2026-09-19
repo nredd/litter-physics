@@ -34,5 +34,8 @@ maintenance logs and clean-surrogate experiments. See `measurements.md`.
 
 Runtime results for the tiny synthetic demos are recorded in `validation.md`. They are
 not representative full-box benchmarks. Native feasibility caps remain deliberately
-explicit. Independent numerical review of the integrated MPM implementation remains
-outstanding; conservation unit tests alone are not a research-grade release gate.
+explicit. The first independent MPM review found active-grid bookkeeping and
+checkpoint-domain gaps, now regression-tested, plus misleading energy-ledger semantics
+still being corrected. It also reported hydrostatic boundary errors and liquid pressure
+noise that remain acceptance blockers. A bounded review and conservation tests do not
+establish research-grade accuracy.
