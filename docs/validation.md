@@ -82,3 +82,7 @@ clean. Installed sdist/wheel tests also passed on Python 3.12, 3.13 and 3.14.
 
 The separate constitutive microbenchmark executed 10,000 real implicit paste updates:
 `mean_update_s=0.000000343`. This is a kernel-only timing, not a visit benchmark.
+
+CI uses current stable `actions/checkout@v7` and `astral-sh/setup-uv@v10`, with
+read-only repository permissions. `tox` also requires the native extension explicitly,
+so a packaging regression cannot turn real-kernel checks into skipped tests.
