@@ -86,4 +86,7 @@ at the bottom boundary and per-particle liquid pressure noise insensitive to tim
 refinement. The initialization-only hydrostatic test is not a time-evolved accuracy
 check. No pressure smoothing, interior-only metric substitution, or material-law change
 has been made to hide these issues; liquid-pressure and full energy acceptance remain
-open. Energy-ledger semantics are being corrected separately.
+open. The former `wall_work_j` ledger was the grid projection kinetic-energy loss, not
+physical work; it is now split into `wall_normal_projection_energy_j` and
+`wall_friction_dissipation_j` with coupling energy terms and an algebraic
+`energy_residual_j`, none of which is an energy acceptance gate. See `energy-ledgers.md`.

@@ -130,6 +130,12 @@ fn corrupt_checkpoint_histories_and_requests_are_rejected() {
         run(&input, Some(&checkpoint)).is_err(),
         "accepted a completed checkpoint with a particle outside the grid"
     );
+    let mut checkpoint = full["checkpoint"].clone();
+    checkpoint["state"]["ledger"]["initial_mechanical_energy"] = json!(1.0);
+    assert!(
+        run(&input, Some(&checkpoint)).is_err(),
+        "accepted a forged initial-energy baseline"
+    );
     let mut changed = input.clone();
     changed["seed"] = json!(99);
     assert!(run(&changed, Some(&full["checkpoint"])).is_err());

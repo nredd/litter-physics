@@ -88,3 +88,23 @@ CI pins the immutable commits for `actions/checkout` v7.0.1 and
 release has no floating `v10` tag; the initial floating-tag CI attempt failed
 before executing tests, so release commits are resolved and pinned explicitly. `tox` also requires the native extension explicitly,
 so a packaging regression cannot turn real-kernel checks into skipped tests.
+
+## Energy-ledger correction
+
+The old `wall_work_j` was a grid projection kinetic-energy change, not physical
+boundary work. The corrected semantics, signs and deliberately incomplete algebraic
+balance are specified in `energy-ledgers.md`. No trajectory law was altered to hide
+the residual. Exact initial-energy restart identity is now checked as well.
+
+Integrated gate: 81 Rust unit tests, 2 Rust integration tests and 142 Python tests
+passed, including coupled-step ledger booking, rejected-trial rollback and forged
+restart-baseline rejection. An actual compiled CLI slump run completed and reported:
+
+```text
+wall_normal_projection_energy_j = -1.0937867722540651e-4
+wall_friction_dissipation_j     =  3.548583755138611e-5
+plastic_dissipation_j           =  1.7388556177281976e-4
+energy_residual_j               =  8.447562054407812e-5
+```
+
+The nonzero residual is reported, not relabelled as an energy-conservation pass.

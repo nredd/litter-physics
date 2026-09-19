@@ -383,7 +383,15 @@ impl FixtureSpec {
             "plastic_dissipation_j".into(),
             sim.ledger.plastic_dissipation,
         );
-        out.insert("wall_work_j".into(), sim.ledger.wall_work);
+        out.insert(
+            "wall_normal_projection_energy_j".into(),
+            sim.ledger.wall_normal_projection_energy,
+        );
+        out.insert(
+            "wall_friction_dissipation_j".into(),
+            sim.ledger.wall_friction_dissipation,
+        );
+        out.insert("energy_residual_j".into(), sim.energy_residual());
         out.insert("outflow_kg".into(), sim.ledger.outflow_mass);
         out.insert("particle_count".into(), particles.len() as f64);
         out.insert("step_count".into(), sim.step_count as f64);
@@ -586,6 +594,8 @@ impl FixtureSpec {
             ),
             ("pellet_wall_impulse_z_kg_m_s", ledger.pellet_wall_impulse.z),
             ("pellet_wall_work_j", ledger.pellet_wall_work),
+            ("coupling_grid_energy_j", ledger.coupling_grid_energy),
+            ("coupling_pellet_energy_j", ledger.coupling_pellet_energy),
         ] {
             out.insert(name.into(), value);
         }

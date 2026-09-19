@@ -53,7 +53,11 @@ pub struct Pellet {
 pub struct WallContact {
     /// Linear impulse delivered by the walls to the pellet in kg m/s.
     pub impulse: Vector3<f64>,
-    /// Work done on the pellet by wall contact forces in J (negative = dissipated).
+    /// Work of the wall contact forces on the pellet in J: `F . v_contact dt`
+    /// with the start-of-step force and contact-point velocity. The stationary
+    /// wall itself does no external work; this term includes the recoverable
+    /// spring energy of the penalty contact, so a negative value is NOT all
+    /// dissipation.
     pub work: f64,
     /// Number of sphere/face pairs in contact.
     pub contacts: usize,
@@ -339,8 +343,9 @@ impl Pellet {
     }
 }
 
-/// Per-node coupling update: new velocity, momentum change, lever arm.
-type NodeCoupling = (Vector3<f64>, Vector3<f64>, Vector3<f64>);
+/// Per-node coupling update: new velocity, momentum change, lever arm,
+/// kinetic-energy change.
+type NodeCoupling = (Vector3<f64>, Vector3<f64>, Vector3<f64>, f64);
 
 /// Result of a grid/pellet coupling pass.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -349,6 +354,10 @@ pub struct CouplingResult {
     pub impulse: Vector3<f64>,
     /// Angular impulse about the pellet centre in kg m^2/s.
     pub angular_impulse: Vector3<f64>,
+    /// Grid kinetic-energy change from the constraint in J:
+    /// `sum_i m_i / 2 (|v_i'|^2 - |v_i|^2)`. Not sign-definite: the constraint
+    /// targets the pellet surface velocity, which can add energy to the grid.
+    pub grid_energy: f64,
     /// Number of constrained nodes.
     pub constrained_nodes: usize,
 }
@@ -406,15 +415,17 @@ pub fn couple_grid(grid: &mut Grid, pellet: &Pellet, friction: f64) -> CouplingR
                 };
             let new_velocity = body_velocity + tangential_new;
             let delta_momentum = (new_velocity - velocity) * mass;
-            Some((new_velocity, delta_momentum, node - pellet.position))
+            let energy = 0.5 * mass * (new_velocity.norm_squared() - velocity.norm_squared());
+            Some((new_velocity, delta_momentum, node - pellet.position, energy))
         })
         .collect();
     let mut result = CouplingResult::default();
     for (slot, update) in grid.active.iter().zip(updates) {
-        if let Some((new_velocity, delta_momentum, lever)) = update {
+        if let Some((new_velocity, delta_momentum, lever, energy)) = update {
             grid.momentum[*slot] = new_velocity;
             result.impulse -= delta_momentum;
             result.angular_impulse -= lever.cross(&delta_momentum);
+            result.grid_energy += energy;
             result.constrained_nodes += 1;
         }
     }

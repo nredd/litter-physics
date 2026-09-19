@@ -406,6 +406,8 @@ fn validate_snapshot(
     if contains_null(&ledger_value)
         || state.ledger.outflow_mass < 0.0
         || (state.ledger.initial_mass - initial.ledger.initial_mass).abs() > 1e-12
+        || state.ledger.initial_mechanical_energy.to_bits()
+            != initial.ledger.initial_mechanical_energy.to_bits()
         || (state.ledger.initial_momentum - initial.ledger.initial_momentum).norm() > 1e-12
     {
         return Err("research checkpoint initial inventory or ledger is inconsistent".into());

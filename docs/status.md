@@ -35,7 +35,7 @@ maintenance logs and clean-surrogate experiments. See `measurements.md`.
 Runtime results for the tiny synthetic demos are recorded in `validation.md`. They are
 not representative full-box benchmarks. Native feasibility caps remain deliberately
 explicit. The first independent MPM review found active-grid bookkeeping and
-checkpoint-domain gaps, now regression-tested, plus misleading energy-ledger semantics
-still being corrected. It also reported hydrostatic boundary errors and liquid pressure
-noise that remain acceptance blockers. A bounded review and conservation tests do not
-establish research-grade accuracy.
+checkpoint-domain gaps and misleading energy-ledger semantics, now regression-tested
+(`energy-ledgers.md`); energy acceptance remains open. It also reported hydrostatic
+boundary errors and liquid pressure noise that remain acceptance blockers. A bounded
+review and conservation tests do not establish research-grade accuracy.

@@ -13,6 +13,11 @@
 //! otherwise it is rejected, `dt` halves, and the step is retried down to a
 //! minimum below which the solver aborts with diagnostics.
 //!
+//! Projection/coupling ledgers record discrete kinetic-energy changes, alongside
+//! approximate contact-force and plastic-dissipation terms. These are diagnostics,
+//! not a closed balance: transfer and time-discretisation losses stay unledgered and
+//! appear in [`Simulation::energy_residual`]. See `docs/energy-ledgers.md`.
+//!
 //! References:
 //! - Hu et al. 2018, <https://doi.org/10.1145/3197517.3201293>
 //! - Jiang et al. 2015, <https://doi.org/10.1145/2766996>
@@ -61,6 +66,8 @@ pub struct Ledger {
     pub outflow_mass: f64,
     /// Initial momentum of material plus pellet in kg m/s.
     pub initial_momentum: Vector3<f64>,
+    /// Initial mechanical energy of material plus pellet in J.
+    pub initial_mechanical_energy: f64,
     /// Cumulative gravity impulse on material plus pellet in kg m/s.
     pub gravity_impulse: Vector3<f64>,
     /// Cumulative impulse from the walls on the material in kg m/s.
@@ -71,11 +78,30 @@ pub struct Ledger {
     pub coupling_impulse: Vector3<f64>,
     /// Cumulative coupling angular impulse about the pellet centre in kg m^2/s.
     pub coupling_angular_impulse: Vector3<f64>,
-    /// Work done by the walls on the material in J (non-positive).
-    pub wall_work: f64,
-    /// Work done by the walls on the pellet in J.
+    /// Kinetic energy removed from the grid by the no-penetration wall
+    /// projection in J (non-positive): `sum_i m_i / 2 (|v_i'|^2 - |v_i|^2)` over
+    /// the normal component zeroed at each wall node. The stationary walls do no
+    /// external work; this lumps inelastic wall impact with the operator-
+    /// splitting loss of reacting gravity and stress at wall nodes every step,
+    /// which is `O(dt)` for material at rest on a wall. NOT physical work.
+    pub wall_normal_projection_energy: f64,
+    /// Kinetic energy removed from the grid by the Coulomb tangential reduction
+    /// at wall nodes in J (non-negative, like `plastic_dissipation`):
+    /// `sum_i m_i / 2 (|t_i|^2 - |t_i'|^2)` over reduced tangential velocities,
+    /// equal to minus the friction impulse dotted with the midpoint velocity.
+    pub wall_friction_dissipation: f64,
+    /// Work of the wall contact force on the pellet in J: `sum F . v_contact dt`
+    /// with the start-of-step force and contact-point velocity. Includes
+    /// recoverable spring energy, so it is neither dissipation nor external
+    /// work of the stationary wall (which is zero).
     pub pellet_wall_work: f64,
-    /// Plastic dissipation in J.
+    /// Grid kinetic-energy change from the pellet coupling projection in J:
+    /// `sum_i m_i / 2 (|v_i'|^2 - |v_i|^2)` over constrained nodes.
+    pub coupling_grid_energy: f64,
+    /// Pellet kinetic-energy change from the coupling impulses in J, evaluated
+    /// exactly before and after [`Pellet::apply_impulse`].
+    pub coupling_pellet_energy: f64,
+    /// Plastic dissipation in J (non-negative).
     pub plastic_dissipation: f64,
     /// Cumulative momentum lost with outflow particles in kg m/s.
     pub outflow_momentum: Vector3<f64>,
@@ -118,6 +144,85 @@ impl fmt::Display for SolverError {
 
 impl std::error::Error for SolverError {}
 
+impl Ledger {
+    /// Sum of every ledgered energy exchange in J: wall projection loss, pellet
+    /// wall work and both coupling terms, minus wall friction and plastic
+    /// dissipation.
+    #[must_use]
+    pub fn ledgered_energy(&self) -> f64 {
+        self.wall_normal_projection_energy - self.wall_friction_dissipation
+            + self.pellet_wall_work
+            + self.coupling_grid_energy
+            + self.coupling_pellet_energy
+            - self.plastic_dissipation
+    }
+
+    /// Check finiteness and the sign invariants each ledger carries by construction.
+    ///
+    /// # Errors
+    ///
+    /// [`SolverError::InvalidState`] naming the first violated field.
+    pub fn validate(&self) -> Result<(), SolverError> {
+        let scalars = [
+            ("initial_mass", self.initial_mass),
+            ("outflow_mass", self.outflow_mass),
+            ("initial_mechanical_energy", self.initial_mechanical_energy),
+            (
+                "wall_normal_projection_energy",
+                self.wall_normal_projection_energy,
+            ),
+            ("wall_friction_dissipation", self.wall_friction_dissipation),
+            ("pellet_wall_work", self.pellet_wall_work),
+            ("coupling_grid_energy", self.coupling_grid_energy),
+            ("coupling_pellet_energy", self.coupling_pellet_energy),
+            ("plastic_dissipation", self.plastic_dissipation),
+        ];
+        for (name, value) in scalars {
+            if !value.is_finite() {
+                return Err(SolverError::InvalidState(format!(
+                    "ledger `{name}` is nonfinite: '{value}'"
+                )));
+            }
+        }
+        let vectors = [
+            ("initial_momentum", self.initial_momentum),
+            ("gravity_impulse", self.gravity_impulse),
+            ("wall_impulse", self.wall_impulse),
+            ("pellet_wall_impulse", self.pellet_wall_impulse),
+            ("coupling_impulse", self.coupling_impulse),
+            ("coupling_angular_impulse", self.coupling_angular_impulse),
+            ("outflow_momentum", self.outflow_momentum),
+        ];
+        for (name, value) in vectors {
+            if !value.iter().all(|v| v.is_finite()) {
+                return Err(SolverError::InvalidState(format!(
+                    "ledger `{name}` is nonfinite: '{value:?}'"
+                )));
+            }
+        }
+        let non_negative = [
+            ("initial_mass", self.initial_mass),
+            ("outflow_mass", self.outflow_mass),
+            ("plastic_dissipation", self.plastic_dissipation),
+            ("wall_friction_dissipation", self.wall_friction_dissipation),
+        ];
+        for (name, value) in non_negative {
+            if value < 0.0 {
+                return Err(SolverError::InvalidState(format!(
+                    "ledger `{name}` must be non-negative, got '{value}'"
+                )));
+            }
+        }
+        if self.wall_normal_projection_energy > 0.0 {
+            return Err(SolverError::InvalidState(format!(
+                "ledger `wall_normal_projection_energy` must be non-positive, got '{}'",
+                self.wall_normal_projection_energy
+            )));
+        }
+        Ok(())
+    }
+}
+
 /// Reason a trial step was rejected.
 #[derive(Debug, Clone, PartialEq)]
 enum StepFailure {
@@ -155,11 +260,22 @@ struct ParticleTrial {
 }
 
 /// Per-node trial result of the grid update.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 struct NodeTrial {
     velocity: Vector3<f64>,
     wall_impulse: Vector3<f64>,
-    wall_work: f64,
+    /// Kinetic energy removed by zeroing approaching normal components (`<= 0`).
+    normal_projection_energy: f64,
+    /// Kinetic energy removed by the tangential Coulomb reduction (`>= 0`).
+    friction_dissipation: f64,
+}
+
+/// Wall contributions of one accepted step, summed over active nodes.
+#[derive(Debug, Clone, Copy, Default)]
+struct WallStep {
+    impulse: Vector3<f64>,
+    normal_projection_energy: f64,
+    friction_dissipation: f64,
 }
 
 /// Simulation state: material, particles, grid, optional pellet, ledgers.
@@ -213,7 +329,7 @@ impl Simulation {
             initial_momentum: momentum,
             ..Ledger::default()
         };
-        Self {
+        let mut simulation = Self {
             material,
             particles,
             grid,
@@ -227,7 +343,9 @@ impl Simulation {
             dt_scale: 1.0,
             min_dt_used: f64::INFINITY,
             max_dt_used: 0.0,
-        }
+        };
+        simulation.ledger.initial_mechanical_energy = simulation.mechanical_energy();
+        simulation
     }
 
     /// Advance to `target_time` with adaptive substeps.
@@ -377,24 +495,26 @@ impl Simulation {
         self.sweep_outflow();
         self.particle_to_grid(dt);
         let node_trials = self.grid_update(dt)?;
-        let mut grid_wall_impulse = Vector3::zeros();
-        let mut grid_wall_work = 0.0;
+        let mut wall = WallStep::default();
         for (slot, trial) in self.grid.active.iter().zip(&node_trials) {
             self.grid.momentum[*slot] = trial.velocity;
-            grid_wall_impulse += trial.wall_impulse;
-            grid_wall_work += trial.wall_work;
+            wall.impulse += trial.wall_impulse;
+            wall.normal_projection_energy += trial.normal_projection_energy;
+            wall.friction_dissipation += trial.friction_dissipation;
         }
         let mut pellet_trial = self.pellet.clone();
         let mut coupling = None;
         if let Some(pellet) = pellet_trial.as_mut() {
             let result = couple_grid(&mut self.grid, pellet, self.config.wall_friction);
+            let kinetic_before = pellet.kinetic_energy();
             pellet.apply_impulse(&result.impulse, &result.angular_impulse);
+            let pellet_energy = pellet.kinetic_energy() - kinetic_before;
             let extents = self.grid.layout.extents();
             let wall = pellet.integrate(dt, &self.config.gravity, &extents, &self.config.contact);
-            if !pellet.is_finite() {
+            if !pellet.is_finite() || !pellet_energy.is_finite() {
                 return Err(StepFailure::PelletNonFinite);
             }
-            coupling = Some((result, wall));
+            coupling = Some((result, pellet_energy, wall));
         }
         let trials = self.grid_to_particle(dt)?;
         let max_cells = trials
@@ -403,13 +523,15 @@ impl Simulation {
         if max_cells > 1.0 {
             return Err(StepFailure::Displacement { max_cells });
         }
-        self.commit(trials, dt, grid_wall_impulse, grid_wall_work);
-        if let (Some(pellet), Some((result, wall))) = (pellet_trial, coupling) {
+        self.commit(trials, dt, &wall);
+        if let (Some(pellet), Some((result, pellet_energy, wall))) = (pellet_trial, coupling) {
             self.ledger.gravity_impulse += self.config.gravity * (pellet.mass * dt);
             self.ledger.pellet_wall_impulse += wall.impulse;
             self.ledger.pellet_wall_work += wall.work;
             self.ledger.coupling_impulse += result.impulse;
             self.ledger.coupling_angular_impulse += result.angular_impulse;
+            self.ledger.coupling_grid_energy += result.grid_energy;
+            self.ledger.coupling_pellet_energy += pellet_energy;
             self.pellet = Some(pellet);
         }
         Ok(())
@@ -460,17 +582,15 @@ impl Simulation {
             .map(|&index| {
                 let mass = masses[index];
                 if mass <= 0.0 {
-                    return Some(NodeTrial {
-                        velocity: Vector3::zeros(),
-                        wall_impulse: Vector3::zeros(),
-                        wall_work: 0.0,
-                    });
+                    return Some(NodeTrial::default());
                 }
                 let mut velocity = momenta[index] / mass + gravity * dt;
                 if !velocity.iter().all(|v| v.is_finite()) {
                     return None;
                 }
                 let before = velocity;
+                let mut normal_projection_energy = 0.0;
+                let mut friction_dissipation = 0.0;
                 let (i, j, k) = layout.coords(index);
                 for (axis, coordinate) in [(0, i), (1, j), (2, k)] {
                     let Some(sign) = layout.wall_side(axis, coordinate) else {
@@ -480,9 +600,10 @@ impl Simulation {
                     if normal_speed >= 0.0 {
                         continue;
                     }
+                    // Zeroing the approaching component removes `m v_n^2 / 2` exactly.
+                    normal_projection_energy -= 0.5 * mass * normal_speed * normal_speed;
                     velocity[axis] = 0.0;
-                    let mut tangential = velocity;
-                    tangential[axis] = 0.0;
+                    let tangential = velocity;
                     let tangential_speed = tangential.norm();
                     let reduction = friction * (-normal_speed);
                     if tangential_speed <= reduction || tangential_speed < 1e-14 {
@@ -490,13 +611,16 @@ impl Simulation {
                     } else {
                         velocity = tangential * ((tangential_speed - reduction) / tangential_speed);
                     }
+                    // The Coulomb reduction shortens the tangential vector, so the
+                    // impulse dotted with the midpoint velocity is the exact loss.
+                    friction_dissipation +=
+                        0.5 * mass * (tangential.norm_squared() - velocity.norm_squared());
                 }
-                let wall_impulse = (velocity - before) * mass;
-                let wall_work = wall_impulse.dot(&((velocity + before) * 0.5));
                 Some(NodeTrial {
                     velocity,
-                    wall_impulse,
-                    wall_work,
+                    wall_impulse: (velocity - before) * mass,
+                    normal_projection_energy,
+                    friction_dissipation,
                 })
             })
             .collect();
@@ -592,13 +716,7 @@ impl Simulation {
     }
 
     /// Commit accepted particle trials and ledger contributions.
-    fn commit(
-        &mut self,
-        trials: Vec<ParticleTrial>,
-        dt: f64,
-        wall_impulse: Vector3<f64>,
-        wall_work: f64,
-    ) {
+    fn commit(&mut self, trials: Vec<ParticleTrial>, dt: f64, wall: &WallStep) {
         let mut dissipation = 0.0;
         for (p, trial) in trials.into_iter().enumerate() {
             self.particles.position[p] = trial.position;
@@ -611,8 +729,9 @@ impl Simulation {
             dissipation += trial.dissipation;
         }
         self.ledger.plastic_dissipation += dissipation;
-        self.ledger.wall_impulse += wall_impulse;
-        self.ledger.wall_work += wall_work;
+        self.ledger.wall_impulse += wall.impulse;
+        self.ledger.wall_normal_projection_energy += wall.normal_projection_energy;
+        self.ledger.wall_friction_dissipation += wall.friction_dissipation;
         self.ledger.gravity_impulse += self.config.gravity * (self.particles.total_mass() * dt);
     }
 
@@ -700,6 +819,22 @@ impl Simulation {
         self.kinetic_energy() + self.potential_energy() + self.elastic_energy()
     }
 
+    /// Algebraic diagnostic `E(t) - E(0) - ledgered_energy` in J.
+    ///
+    /// This mixes particle mechanical energy with grid-level projection terms
+    /// and is NOT a physical unexplained-energy closure: transient grid kinetic
+    /// energy removed by the wall projection never reaches particle state, so
+    /// the resting hydrostatic column reports a positive residual growing
+    /// linearly in time. Particle/grid transfer losses, constitutive and pellet
+    /// time-discretisation errors, contact spring energy and outflow energy are
+    /// not ledgered either.
+    #[must_use]
+    pub fn energy_residual(&self) -> f64 {
+        self.mechanical_energy()
+            - self.ledger.initial_mechanical_energy
+            - self.ledger.ledgered_energy()
+    }
+
     /// Validate the whole state (used after resume).
     ///
     /// # Errors
@@ -709,6 +844,7 @@ impl Simulation {
         self.particles
             .validate()
             .map_err(SolverError::InvalidState)?;
+        self.ledger.validate()?;
         if !self.time.is_finite() || self.time < 0.0 {
             return Err(SolverError::InvalidState(format!(
                 "time '{}' invalid",
@@ -744,7 +880,7 @@ impl Simulation {
 #[cfg(test)]
 #[allow(clippy::cast_precision_loss, clippy::float_cmp)] // exact values by construction.
 mod tests {
-    use super::{Ledger, Simulation, SolverConfig};
+    use super::{Ledger, Simulation, SolverConfig, StepFailure};
     use crate::mpm::constitutive::Material;
     use crate::mpm::grid::{Grid, GridLayout};
     use crate::mpm::particles::ParticleSet;
@@ -850,7 +986,8 @@ mod tests {
         let mut sim = Simulation::new(material, particles, Grid::new(layout), None, config());
         sim.advance_to(0.15).unwrap_or_else(|e| panic!("{e}"));
         assert!(sim.ledger.wall_impulse.z > 0.0);
-        assert!(sim.ledger.wall_work <= 1e-12);
+        assert!(sim.ledger.wall_normal_projection_energy < 0.0);
+        assert!(sim.ledger.wall_friction_dissipation >= 0.0);
         let residual = sim.momentum_residual();
         let scale = sim.ledger.gravity_impulse.norm();
         assert!(
@@ -867,5 +1004,316 @@ mod tests {
         let ledger = Ledger::default();
         assert_eq!(ledger.initial_mass, 0.0);
         assert_eq!(ledger.wall_impulse, Vector3::zeros());
+        assert_eq!(ledger.ledgered_energy(), 0.0);
+        ledger.validate().unwrap_or_else(|e| panic!("{e}"));
+    }
+
+    /// Empty simulation on a small grid so `grid_update` can be probed node by node.
+    fn empty_sim(gravity: Vector3<f64>) -> Simulation {
+        let material = Material::paste(1000.0, 1.0e5, 0.3, 1.0e6, 0.0, 1.0);
+        let layout =
+            GridLayout::new([0.02, 0.02, 0.02], 0.002, 1_000_000).unwrap_or_else(|e| panic!("{e}"));
+        let mut cfg = config();
+        cfg.gravity = gravity;
+        Simulation::new(
+            material,
+            ParticleSet::with_capacity(0),
+            Grid::new(layout),
+            None,
+            cfg,
+        )
+    }
+
+    #[test]
+    fn wall_decomposition_equals_grid_kinetic_jump_for_slide_stick_and_corner() {
+        let mut sim = empty_sim(Vector3::zeros());
+        let layout = sim.grid.layout;
+        let mass = 1e-6;
+        // Floor node, sliding: tangential 1.0 > mu * normal 0.4 * 0.5.
+        let slide = layout.index(5, 5, 0);
+        // Floor node, sticking: tangential 0.1 < 0.4 * 0.5.
+        let stick = layout.index(6, 5, 0);
+        // Corner node on the low x and low z faces, approaching both.
+        let corner = layout.index(0, 5, 0);
+        // Floor node moving away: untouched.
+        let free = layout.index(7, 5, 0);
+        let velocities = [
+            (slide, Vector3::new(1.0, 0.0, -0.5)),
+            (stick, Vector3::new(0.1, 0.0, -0.5)),
+            (corner, Vector3::new(-0.3, 0.2, -0.4)),
+            (free, Vector3::new(0.3, 0.0, 0.2)),
+        ];
+        for (index, velocity) in velocities {
+            sim.grid.deposit(index, mass, velocity * mass);
+        }
+        let trials = sim.grid_update(1e-3).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(trials.len(), 4);
+        for ((index, velocity), trial) in velocities.iter().zip(&trials) {
+            let jump = 0.5 * mass * (trial.velocity.norm_squared() - velocity.norm_squared());
+            let decomposed = trial.normal_projection_energy - trial.friction_dissipation;
+            assert!(
+                (jump - decomposed).abs() <= 1e-15 * jump.abs().max(1e-12),
+                "node {index}: jump={jump} decomposed={decomposed}"
+            );
+            assert!(trial.normal_projection_energy <= 0.0);
+            assert!(trial.friction_dissipation >= 0.0);
+            let impulse = (trial.velocity - velocity) * mass;
+            assert!((impulse - trial.wall_impulse).norm() < 1e-20);
+        }
+        // Sliding: normal loss m v_n^2 / 2, tangential reduced by mu v_n.
+        assert!((trials[0].normal_projection_energy + 0.5 * mass * 0.25).abs() < 1e-20);
+        let expected = 0.5 * mass * (1.0 - 0.8f64.powi(2));
+        assert!((trials[0].friction_dissipation - expected).abs() < 1e-20);
+        assert!((trials[0].velocity - Vector3::new(0.8, 0.0, 0.0)).norm() < 1e-15);
+        // Sticking: the whole tangential kinetic energy is friction dissipation.
+        assert!((trials[1].friction_dissipation - 0.5 * mass * 0.01).abs() < 1e-20);
+        assert_eq!(trials[1].velocity, Vector3::zeros());
+        // Corner: both approaching components are removed; the x projection
+        // happens first, and friction shrinks the z approach before its turn.
+        assert!(trials[2].velocity.x == 0.0 && trials[2].velocity.z == 0.0);
+        assert!(trials[2].normal_projection_energy <= -0.5 * mass * 0.09 + 1e-20);
+        assert!(trials[2].normal_projection_energy > -0.5 * mass * (0.09 + 0.16));
+        assert!(trials[2].friction_dissipation > 0.0);
+        // Receding node: nothing happens.
+        assert_eq!(trials[3].normal_projection_energy, 0.0);
+        assert_eq!(trials[3].friction_dissipation, 0.0);
+        assert_eq!(trials[3].wall_impulse, Vector3::zeros());
+    }
+
+    /// Paste column at rest with exact hydrostatic prestress under a fixed step cap.
+    fn resting_column(max_dt: f64) -> (crate::mpm::fixtures::FixtureSpec, Simulation) {
+        use crate::mpm::fixtures::{Fixture, FixtureSpec, ResourceLimits};
+        let mut cfg = config();
+        cfg.max_dt = max_dt;
+        let spec = FixtureSpec {
+            fixture: Fixture::Hydrostatic,
+            material: Material::paste(1000.0, 1e5, 0.3, 1e4, 1.0, 1.0),
+            grid_spacing: 0.002,
+            domain: [0.02, 0.02, 0.02],
+            initial_size: [0.02, 0.02, 0.01],
+            initial_velocity: Vector3::zeros(),
+            seed: 1,
+            pellet: None,
+            config: cfg,
+            limits: ResourceLimits {
+                max_particles: 100_000,
+                max_nodes: 1_000_000,
+            },
+        };
+        let (sim, _) = spec.build().unwrap_or_else(|e| panic!("{e}"));
+        (spec, sim)
+    }
+
+    #[test]
+    fn resting_column_projection_loss_halves_with_dt_and_is_not_physical_work() {
+        let mut losses = Vec::new();
+        for max_dt in [4e-5, 2e-5] {
+            let (spec, mut sim) = resting_column(max_dt);
+            sim.advance_to(0.02).unwrap_or_else(|e| panic!("{e}"));
+            assert_eq!(sim.limited_steps, 0, "cap must bind for the scaling claim");
+            assert_eq!(sim.rejected_steps, 0);
+            // The material barely moves, so the stationary walls do no physical
+            // work, yet the projection term is orders of magnitude above the KE.
+            assert!(sim.ledger.wall_normal_projection_energy < 0.0);
+            assert!(
+                sim.kinetic_energy() < 1e-3 * sim.ledger.wall_normal_projection_energy.abs(),
+                "KE={} loss={}",
+                sim.kinetic_energy(),
+                sim.ledger.wall_normal_projection_energy
+            );
+            assert!(sim.ledger.wall_friction_dissipation >= 0.0);
+            // Momentum accounting stays exact regardless.
+            assert!(sim.momentum_residual().norm() < 1e-9 * sim.ledger.gravity_impulse.norm());
+            let obs = spec.observables(&sim);
+            assert_eq!(
+                obs["wall_normal_projection_energy_j"],
+                sim.ledger.wall_normal_projection_energy
+            );
+            assert!(!obs.contains_key("wall_work_j"));
+            // The residual is the grid-level loss that never reached particle energy.
+            assert!(obs["energy_residual_j"] > 0.0);
+            losses.push(sim.ledger.wall_normal_projection_energy);
+        }
+        let ratio = losses[0] / losses[1];
+        assert!((ratio - 2.0).abs() < 0.1, "ratio={ratio} losses={losses:?}");
+    }
+
+    #[test]
+    fn coupling_energy_ledgers_match_direct_kinetic_changes() {
+        use crate::mpm::rigid::{Pellet, couple_grid};
+        use nalgebra::UnitQuaternion;
+        let mut sim = empty_sim(Vector3::zeros());
+        let layout = sim.grid.layout;
+        let mut pellet = Pellet::new(
+            0.003,
+            0.012,
+            1100.0,
+            Vector3::new(0.01, 0.01, 0.01),
+            UnitQuaternion::identity(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        pellet.velocity = Vector3::new(0.0, 0.0, -0.1);
+        pellet.angular_momentum = Vector3::new(0.0, 1e-7, 0.0);
+        for i in 0..layout.nodes[0] {
+            for j in 0..layout.nodes[1] {
+                for k in 0..layout.nodes[2] {
+                    let node = layout.node_position(i, j, k);
+                    if pellet.signed_distance(&node).0 <= 0.0 {
+                        let velocity = Vector3::new(0.2 * (node.x - 0.01) / 0.006, 0.05, 0.3);
+                        sim.grid
+                            .deposit(layout.index(i, j, k), 1e-6, velocity * 1e-6);
+                    }
+                }
+            }
+        }
+        // Grid holds momentum; convert to velocities as `grid_update` would.
+        let grid_ke = |grid: &Grid| -> f64 {
+            grid.active
+                .iter()
+                .map(|&n| 0.5 * grid.mass[n] * grid.momentum[n].norm_squared())
+                .sum()
+        };
+        for &n in &sim.grid.active {
+            sim.grid.momentum[n] /= sim.grid.mass[n];
+        }
+        let before = grid_ke(&sim.grid);
+        let result = couple_grid(&mut sim.grid, &pellet, 0.4);
+        assert!(result.constrained_nodes > 0);
+        let grid_change = grid_ke(&sim.grid) - before;
+        assert!(
+            (grid_change - result.grid_energy).abs() < 1e-15 * grid_change.abs().max(1e-12),
+            "grid {grid_change} vs {}",
+            result.grid_energy
+        );
+        let pellet_before = pellet.kinetic_energy();
+        pellet.apply_impulse(&result.impulse, &result.angular_impulse);
+        let pellet_change = pellet.kinetic_energy() - pellet_before;
+        assert!(pellet_change.is_finite() && pellet_change != 0.0);
+        // The solver books exactly these two numbers.
+        let mut ledger = Ledger::default();
+        ledger.coupling_grid_energy += result.grid_energy;
+        ledger.coupling_pellet_energy += pellet_change;
+        assert_eq!(ledger.ledgered_energy(), result.grid_energy + pellet_change);
+        ledger.validate().unwrap_or_else(|e| panic!("{e}"));
+    }
+
+    #[test]
+    fn accepted_step_books_both_coupling_energy_changes() {
+        use crate::mpm::rigid::{Pellet, couple_grid};
+        use nalgebra::UnitQuaternion;
+        let base = empty_sim(Vector3::zeros());
+        let mut particles = block(base.material, 0.002, [0.008; 3], [0.006; 3]);
+        for velocity in &mut particles.velocity {
+            *velocity = Vector3::new(0.05, 0.0, 0.1);
+        }
+        let pellet = Pellet::new(
+            0.003,
+            0.012,
+            1100.0,
+            Vector3::new(0.01, 0.01, 0.01),
+            UnitQuaternion::identity(),
+        )
+        .expect("pellet");
+        let mut sim = Simulation::new(
+            base.material,
+            particles,
+            base.grid,
+            Some(pellet.clone()),
+            base.config,
+        );
+        let mut reference = sim.clone();
+        let dt = 1e-5;
+        reference.particle_to_grid(dt);
+        let trials = reference.grid_update(dt).expect("grid update");
+        for (slot, trial) in reference.grid.active.iter().zip(trials) {
+            reference.grid.momentum[*slot] = trial.velocity;
+        }
+        let exchange = couple_grid(&mut reference.grid, &pellet, reference.config.wall_friction);
+        let mut changed_pellet = pellet.clone();
+        changed_pellet.apply_impulse(&exchange.impulse, &exchange.angular_impulse);
+        let pellet_energy = changed_pellet.kinetic_energy() - pellet.kinetic_energy();
+        assert!(exchange.grid_energy.abs() > 1e-12);
+        assert!(pellet_energy.abs() > 1e-12);
+        sim.try_step(dt).expect("accepted coupled step");
+        assert_eq!(sim.ledger.coupling_grid_energy, exchange.grid_energy);
+        assert_eq!(sim.ledger.coupling_pellet_energy, pellet_energy);
+    }
+
+    #[test]
+    fn rejected_trial_step_preserves_ledger_and_state() {
+        let material = Material::paste(1000.0, 1.0e5, 0.3, 1.0e6, 0.0, 1.0);
+        let layout =
+            GridLayout::new([0.02, 0.02, 0.02], 0.002, 1_000_000).unwrap_or_else(|e| panic!("{e}"));
+        let mut particles = block(material, 0.002, [0.008, 0.008, 0.006], [0.006, 0.006, 0.0]);
+        for v in &mut particles.velocity {
+            *v = Vector3::new(1.0, 0.0, -1.0);
+        }
+        let mut sim = Simulation::new(material, particles, Grid::new(layout), None, config());
+        sim.advance_to(2e-4).unwrap_or_else(|e| panic!("{e}"));
+        let reference = sim.clone();
+        assert!(reference.ledger.wall_normal_projection_energy < 0.0);
+        // 1 m/s over 5 ms crosses 2.5 cells and inverts the trial deformation:
+        // rejected (constitutive or displacement) before any commit.
+        let failure = sim.try_step(5e-3).expect_err("oversized step must reject");
+        assert!(
+            matches!(
+                failure,
+                StepFailure::Displacement { .. } | StepFailure::Constitutive(_)
+            ),
+            "{failure}"
+        );
+        assert_eq!(sim.ledger, reference.ledger);
+        assert_eq!(sim.particles, reference.particles);
+        assert_eq!(sim.time, reference.time);
+    }
+
+    #[test]
+    fn ledger_round_trips_through_json_and_rejects_bad_signs() {
+        let (_, mut sim) = resting_column(4e-5);
+        sim.advance_to(2e-4).unwrap_or_else(|e| panic!("{e}"));
+        let ledger = sim.ledger;
+        assert!(ledger.initial_mechanical_energy > 0.0);
+        let json = serde_json::to_string(&ledger).unwrap_or_else(|e| panic!("{e}"));
+        assert!(json.contains("wall_normal_projection_energy"));
+        assert!(!json.contains("\"wall_work\""));
+        let restored: Ledger = serde_json::from_str(&json).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(restored, ledger);
+        assert!(
+            serde_json::from_str::<Ledger>(
+                &json.replace("wall_normal_projection_energy", "wall_work")
+            )
+            .is_err()
+        );
+        let mut bad = ledger;
+        bad.wall_normal_projection_energy = 1e-9;
+        let message = bad
+            .validate()
+            .expect_err("positive projection energy")
+            .to_string();
+        assert!(
+            message.contains("non-positive, got '0.000000001'"),
+            "{message}"
+        );
+        let mut bad = ledger;
+        bad.wall_friction_dissipation = -1e-9;
+        let message = bad
+            .validate()
+            .expect_err("negative dissipation")
+            .to_string();
+        assert!(
+            message.contains("non-negative, got '-0.000000001'"),
+            "{message}"
+        );
+        let mut bad = ledger;
+        bad.coupling_grid_energy = f64::NAN;
+        assert!(
+            bad.validate()
+                .unwrap_err()
+                .to_string()
+                .contains("nonfinite")
+        );
+        assert!(sim.validate().is_ok());
+        sim.ledger.plastic_dissipation = -1.0;
+        assert!(sim.validate().is_err());
     }
 }
