@@ -52,3 +52,17 @@ References:
 - Herschel-Bulkley MPM: [here](https://doi.org/10.1145/2751541)
 - APIC: [here](https://doi.org/10.1145/2766996)
 - Future porous mixtures: [here](https://doi.org/10.1145/3072959.3073651)
+
+### Timestep evidence
+
+`limited_steps` counts accepted steps whose stability/recovery limit was below the
+requested `dt_s`, evaluated BEFORE clipping to recording or final-time boundaries.
+Endpoint clipping alone does not increment it. The count is conservative: a limiter
+may be below the requested cap even when an endpoint clips the step further.
+
+`max_dt_s == dt_s` only establishes that the cap was reached at least once; it does
+not establish that adaptive limiting stayed inactive afterward. A separated fixed-
+timestep refinement study must reject nonzero `limited_steps` or `rejected_steps`.
+The counter is preserved in checkpoints and cannot exceed accepted `step_count`.
+Checkpoints lacking this history are rejected, not assigned a fabricated zero;
+Python also refuses restart across changed numerical builds.

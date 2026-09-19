@@ -38,6 +38,27 @@ fn completes_a_real_fixture_without_claiming_validation() {
 }
 
 #[test]
+fn limiter_history_distinguishes_endpoint_clips_from_adaptive_reductions() {
+    let typed: Request = serde_json::from_value(request()).expect("request");
+    let spec = specification(&typed).expect("spec");
+    let (mut sim, _) = spec.build().expect("build");
+    sim.config.gravity = Vector3::zeros();
+    let cap = sim.stability_limit() * 0.25;
+    sim.config.max_dt = cap;
+    sim.advance_to(2.5 * cap)
+        .expect("includes an endpoint clip");
+    assert_eq!(spec.observables(&sim).get("limited_steps"), Some(&0.0));
+    assert!((sim.max_dt_used - cap).abs() < 1e-15);
+
+    // A previous rejection can leave recovery scaling active even after the run
+    // has already reached the requested cap. The maximum alone misses this.
+    sim.dt_scale = 0.1;
+    sim.advance_to(sim.time + cap).expect("recovery steps");
+    assert!(spec.observables(&sim)["limited_steps"] > 0.0);
+    assert!((sim.max_dt_used - cap).abs() < 1e-15);
+}
+
+#[test]
 fn unsupported_fines_and_bad_parameters_fail_closed() {
     for (key, value) in [
         ("material", json!("fines")),
@@ -58,7 +79,8 @@ fn unsupported_fines_and_bad_parameters_fail_closed() {
 
 #[test]
 fn full_state_json_round_trip_matches_uninterrupted_trajectory() {
-    let input = request();
+    let mut input = request();
+    input["dt_s"] = json!(0.002);
     let typed: Request = serde_json::from_value(input.clone()).expect("request");
     let spec = specification(&typed).expect("spec");
     let (mut sim, _) = spec.build().expect("build");
@@ -76,6 +98,12 @@ fn full_state_json_round_trip_matches_uninterrupted_trajectory() {
     let full = run(&input, None).expect("full");
     assert_eq!(resumed["checkpoint"], full["checkpoint"]);
     assert_eq!(resumed["observables"], full["observables"]);
+    assert!(
+        full["observables"]["limited_steps"]
+            .as_f64()
+            .expect("count")
+            > 0.0
+    );
     assert_eq!(resumed["frames"].as_array().expect("frames").len(), 1);
     assert_eq!(resumed["frames"][0], full["frames"][2]);
 }
@@ -84,7 +112,11 @@ fn full_state_json_round_trip_matches_uninterrupted_trajectory() {
 fn corrupt_checkpoint_histories_and_requests_are_rejected() {
     let input = request();
     let full = run(&input, None).expect("run");
-    for (key, value) in [("dt_scale", json!(0)), ("next_record_index", json!(0))] {
+    for (key, value) in [
+        ("dt_scale", json!(0)),
+        ("next_record_index", json!(0)),
+        ("limited_steps", json!(u64::MAX)),
+    ] {
         let mut checkpoint = full["checkpoint"].clone();
         checkpoint["state"][key] = value;
         assert!(run(&input, Some(&checkpoint)).is_err());

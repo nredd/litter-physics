@@ -46,6 +46,7 @@ struct Snapshot {
     pellet: Option<Pellet>,
     ledger: Ledger,
     step_count: u64,
+    limited_steps: u64,
     rejected_steps: u64,
     dt_scale: f64,
     min_dt_used: Option<f64>,
@@ -308,6 +309,7 @@ fn snapshot(sim: &Simulation, next_record_index: u32) -> Snapshot {
         pellet: sim.pellet.clone(),
         ledger: sim.ledger,
         step_count: sim.step_count,
+        limited_steps: sim.limited_steps,
         rejected_steps: sim.rejected_steps,
         dt_scale: sim.dt_scale,
         min_dt_used: sim.min_dt_used.is_finite().then_some(sim.min_dt_used),
@@ -354,6 +356,7 @@ fn restore(
     sim.ledger = state.ledger;
     sim.time = cp.time_s;
     sim.step_count = state.step_count;
+    sim.limited_steps = state.limited_steps;
     sim.rejected_steps = state.rejected_steps;
     sim.dt_scale = state.dt_scale;
     sim.min_dt_used = state.min_dt_used.unwrap_or(f64::INFINITY);
@@ -380,6 +383,7 @@ fn validate_snapshot(
         || state.next_record_index == 0
         || state.next_record_index > 10_002
         || state.step_count > 1_000_000_000_000
+        || state.limited_steps > state.step_count
         || state.rejected_steps > 1_000_000_000_000
     {
         return Err("invalid research checkpoint integration history".into());

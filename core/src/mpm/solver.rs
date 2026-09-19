@@ -181,6 +181,9 @@ pub struct Simulation {
     pub time: f64,
     /// Accepted steps.
     pub step_count: u64,
+    /// Accepted steps whose stability/recovery limit was below the requested cap,
+    /// evaluated before endpoint clipping. This is not inferred from `max_dt_used`.
+    pub limited_steps: u64,
     /// Rejected steps.
     pub rejected_steps: u64,
     /// Current step scale in `(0, 1]` applied to the stability limit.
@@ -219,6 +222,7 @@ impl Simulation {
             ledger,
             time: 0.0,
             step_count: 0,
+            limited_steps: 0,
             rejected_steps: 0,
             dt_scale: 1.0,
             min_dt_used: f64::INFINITY,
@@ -261,9 +265,9 @@ impl Simulation {
             }
             let remaining = target_time - self.time;
             let limit = self.stability_limit();
-            let mut dt = (self.dt_scale * limit)
-                .min(self.config.max_dt)
-                .min(remaining);
+            let scaled_limit = self.dt_scale * limit;
+            let limited = scaled_limit < self.config.max_dt;
+            let mut dt = scaled_limit.min(self.config.max_dt).min(remaining);
             if remaining - dt < 1e-12 * target_time.max(1.0) {
                 dt = remaining;
             }
@@ -282,6 +286,7 @@ impl Simulation {
                 Ok(()) => {
                     self.time += dt;
                     self.step_count += 1;
+                    self.limited_steps += u64::from(limited);
                     self.min_dt_used = self.min_dt_used.min(dt);
                     self.max_dt_used = self.max_dt_used.max(dt);
                     self.dt_scale = (self.dt_scale * DT_RECOVERY).min(1.0);

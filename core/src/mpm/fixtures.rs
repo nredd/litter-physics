@@ -387,6 +387,7 @@ impl FixtureSpec {
         out.insert("outflow_kg".into(), sim.ledger.outflow_mass);
         out.insert("particle_count".into(), particles.len() as f64);
         out.insert("step_count".into(), sim.step_count as f64);
+        out.insert("limited_steps".into(), sim.limited_steps as f64);
         out.insert("rejected_steps".into(), sim.rejected_steps as f64);
         out.insert(
             "min_dt_s".into(),
