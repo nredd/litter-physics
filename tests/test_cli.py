@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import socket
+import urllib.parse
+import webbrowser
 from pathlib import Path
 
 import pytest
@@ -233,7 +235,10 @@ def test_observations_and_visits(tmp_path: Path, capsys: pytest.CaptureFixture[s
 
 
 def test_view_serves_and_stops(
-    tmp_path: Path, patched_native: FakeCore, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    patched_native: FakeCore,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """`view` serves for a bounded duration on free loopback ports and exits 0."""
 
@@ -245,18 +250,27 @@ def test_view_serves_and_stops(
     out = tmp_path / "run"
     assert main(["run", HOUSEHOLD, "--out", str(out)]) == EXIT_OK
     capsys.readouterr()
+    opened: list[str] = []
+    monkeypatch.setattr(webbrowser, "open", opened.append)
+    grpc_port = free_port()
     code = main(
         [
             "view",
             str(out),
             "--grpc-port",
-            str(free_port()),
+            str(grpc_port),
             "--web-port",
             str(free_port()),
             "--duration",
             "1.0",
+            "--open-browser",
         ]
     )
     assert code == EXIT_OK
-    assert "loopback only" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    link = next(line for line in output.splitlines() if line.startswith("viewer: "))
+    url = link.removeprefix("viewer: ").removesuffix(" (loopback only)")
+    assert opened == [url]
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+    assert query == {"url": [f"rerun+http://127.0.0.1:{grpc_port}/proxy"]}
     assert main(["view", str(tmp_path / "nothing")]) == EXIT_FAILURE

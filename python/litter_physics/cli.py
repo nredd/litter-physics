@@ -323,11 +323,11 @@ def cmd_view(args: argparse.Namespace) -> int:
     summary = ledger_summary(run_dir.read_metrics())
     print(json.dumps({"status": str(manifest.status), "ledger": summary}, indent=2))
     handle = start_loopback_viewer(run_dir, grpc_port=args.grpc_port, web_port=args.web_port)
-    print(f"viewer: {handle.web_url}?url={handle.grpc_url} (loopback only)")
+    print(f"viewer: {handle.web_url} (loopback only)")
     if args.open_browser:
         import webbrowser  # local import: deferred, only used when opening a browser
 
-        webbrowser.open(f"{handle.web_url}?url={handle.grpc_url}")
+        webbrowser.open(handle.web_url)
     deadline = None if args.duration is None else time.monotonic() + args.duration
     stop = False
 

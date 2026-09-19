@@ -137,3 +137,6 @@ Integration guarantees:
 The advertised browser URL includes an encoded `url` query parameter selecting the
 loopback recording server. Opening only the bare HTTP root serves the viewer shell,
 not the selected recording. Keep the full link printed by `view`, including its query.
+The CLI prints and opens that canonical link unchanged; it must not append a second
+source parameter or leave the `+` in `rerun+http` unescaped (query parsing turns it
+into a space). Tests cover both the server handle and the browser-opening CLI path.
