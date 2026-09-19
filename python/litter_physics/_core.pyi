@@ -1,0 +1,3 @@
+"""Type contract for the compiled numerical extension."""
+
+def protocol_version() -> int: ...

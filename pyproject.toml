@@ -1,0 +1,55 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "litter-physics"
+version = "0.1.0"
+description = "Two-scale pine-pellet litter simulation with explicit validation boundaries"
+requires-python = ">=3.12,<3.15"
+license = "LicenseRef-Proprietary"
+dependencies = ["pydantic>=2.11,<3", "numpy>=2,<3", "scipy>=1.15,<2", "PyYAML>=6,<7", "pyarrow>=20", "rerun-sdk>=0.26,<1"]
+
+[project.scripts]
+litter-physics = "litter_physics.cli:main"
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "ty",
+    "pytest",
+    "pytest-cov",
+    "tox",
+    "jsonschema",
+    "maturin>=1.9,<2",
+    "tox-uv>=1.36.0",
+]
+
+[tool.maturin]
+manifest-path = "core/Cargo.toml"
+python-source = "python"
+module-name = "litter_physics._core"
+features = ["pyo3/extension-module"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ty.analysis]
+respect-type-ignore-comments = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+
+[tool.tox]
+env_list = ["py312", "py313", "py314"]
+
+[tool.tox.env_run_base]
+runner = "uv-venv-runner"
+description = "Run Python integration tests"
+deps = ["pytest", "jsonschema"]
+commands = [["pytest", "{posargs:tests}"]]
