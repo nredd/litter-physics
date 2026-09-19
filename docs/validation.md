@@ -83,6 +83,8 @@ clean. Installed sdist/wheel tests also passed on Python 3.12, 3.13 and 3.14.
 The separate constitutive microbenchmark executed 10,000 real implicit paste updates:
 `mean_update_s=0.000000343`. This is a kernel-only timing, not a visit benchmark.
 
-CI uses current stable `actions/checkout@v7` and `astral-sh/setup-uv@v10`, with
-read-only repository permissions. `tox` also requires the native extension explicitly,
+CI pins the immutable commits for `actions/checkout` v7.0.1 and
+`astral-sh/setup-uv` v10.1.0, with read-only repository permissions. The latter
+release has no floating `v10` tag; the initial floating-tag CI attempt failed
+before executing tests, so release commits are resolved and pinned explicitly. `tox` also requires the native extension explicitly,
 so a packaging regression cannot turn real-kernel checks into skipped tests.
