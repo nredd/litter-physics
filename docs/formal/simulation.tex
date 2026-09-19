@@ -1,0 +1,320 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=23mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern,microtype}
+\usepackage{amsmath,amssymb,bm,mathtools}
+\usepackage{siunitx,booktabs,tabularx,longtable,array}
+\usepackage{graphicx,tikz,pgfplots}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\usepgfplotslibrary{groupplots}
+\pgfplotsset{compat=1.18}
+\usepackage{xurl}
+\usepackage[colorlinks=true,linkcolor=blue!55!black,citecolor=blue!55!black,
+ urlcolor=blue!55!black,pdftitle={Litter Physics: Formal Model and Implementation},
+ pdfauthor={Litter Physics project}]{hyperref}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Litter Physics: model and implementation}
+\fancyhead[R]{\small Baseline \nolinkurl{9a66a55}}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
+\setlength{\emergencystretch}{1.5em}
+\setlength{\parskip}{.3em}
+\numberwithin{equation}{section}
+\sisetup{per-mode=symbol,detect-all}
+\newcommand{\source}[1]{\href{https://github.com/nredd/litter-physics/blob/9a66a559ed478629d514756662a8fd98a8f52f50/#1}{\nolinkurl{#1}}}
+\input{generated/calculations.tex}
+
+\title{\textbf{Litter Physics}\\[.4em]
+ A formal model, numerical method,\\and implementation audit}
+\author{Litter Physics project}
+\date{19 September 2026\\[.3em]\small Scientific source baseline: \nolinkurl{9a66a55}}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+This note derives the models currently implemented for a two-box pine-pellet
+litter simulation, connects their equations to Rust and Python components, and
+separates numerical evidence from intended physical capability. The household
+model combines rigid multisphere pellets, frictional contact, timed visit and
+maintenance events, and conservative but phenomenological water/fines transport.
+Research fixtures use quadratic MLS-MPM with affine particle velocities,
+finite-strain viscoplastic paste or weakly compressible liquid, and optional
+single-pellet impulse coupling. Worked dimensional examples, constitutive
+calculations, method diagrams and archived refinement plots make assumptions
+and failure modes explicit. The six-case slump study completes but does not
+meet its refinement criterion. Neither full physical energy closure nor
+measured household accuracy is established. No calibrated response bridge
+between the two numerical scales is yet active.
+\end{abstract}
+
+\noindent\textbf{Status of this document.} A source-grounded description of an
+executable preliminary model, not a claim that the intended research multiphysics
+or an actual household has been validated. The native fidelity labels remain
+\nolinkurl{preliminary_household} and \nolinkurl{research_unvalidated}.
+
+\tableofcontents
+\clearpage
+
+\section{Problem definition, scope, and two numerical scales}
+The physical target is a household using two stainless-steel Sorstrem sifting
+boxes filled with pine pellets. Visits disturb and redistribute the bed; liquid
+and waste are deposited; wet pellets swell and break down; fines sift into a
+drawer; scooping, drawer emptying and topping up alter the next visit's initial
+condition. The mathematical target is therefore a persistent state trajectory,
+not a collection of independent clean-box scenes:
+\begin{equation}
+ \mathcal X(t+\Delta t)=\mathcal S_{\Delta t}
+     [\mathcal X(t),\boldsymbol\theta,\mathcal E_{[t,t+\Delta t]}],
+ \qquad \mathbf y(t)=\mathcal H[\mathcal X(t)].
+ \label{eq:state-map}
+\end{equation}
+$\mathcal X$ contains pellet poses, velocities and contact histories; material
+fields and compartments; and cumulative bookkeeping. $\boldsymbol\theta$ denotes
+geometry, material and proxy-behavior parameters. $\mathcal E$ is the timed event
+sequence; $\mathcal H$ supplies observables. Checkpointing must preserve this
+state, not merely a visualization frame.
+
+Two computational scales address different questions. The household scale
+retains many discrete pellets and long-lived maintenance state using reduced
+material laws. Research fixtures isolate continuum constitutive behavior and
+pellet/material interaction at much smaller sizes. The intended eventual
+reduction is a measured, verified response $R(\boldsymbol\theta,\mathbf z)$
+conditioning household rules on local state $\mathbf z$. That coupling remains
+planned, even though a standalone table interpolator already exists.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[>=Latex,font=\small,
+ box/.style={draw,rounded corners,align=center,text width=4.7cm,minimum height=1.15cm},
+ smallbox/.style={box,text width=4.2cm}]
+ \node[box,fill=gray!8] (input) {Geometry, materials, event requests\\validated Python contracts};
+ \node[smallbox,fill=blue!6,below left=1cm and .15cm of input] (house)
+ {Household model\\DEM pellets + reduced fields\\two persistent box states};
+ \node[smallbox,fill=orange!8,below right=1cm and .15cm of input] (research)
+ {Research fixtures\\single-phase MLS-MPM\\optional one-pellet coupling};
+ \node[smallbox,below=1cm of house] (events)
+ {Visit generation + maintenance\\species compartments\\immutable run segments};
+ \node[smallbox,below=1cm of research] (verify)
+ {Refinement + clean surrogates\\numerical checks exist\\measured validation missing};
+ \node[box,below=5.7cm of input,fill=gray!8] (output)
+ {Parquet metrics, checkpoints, provenance\\Rerun browser replay; explicit fidelity};
+ \draw[->] (input)--(house); \draw[->] (input)--(research);
+ \draw[<->] (house)--(events); \draw[->] (research)--(verify);
+ \draw[->] (events)--(output); \draw[->] (verify)--(output);
+ \draw[->,dashed,thick] (research.west)--node[above,align=center,font=\scriptsize]
+ {planned\\response bridge}(house.east);
+\end{tikzpicture}
+\caption{Implemented components use solid arrows; the cross-scale response
+bridge is not connected. Output and provenance are shared infrastructure, not
+proof of equivalent fidelity between the two models.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Evidence and approximation vocabulary}
+\begin{description}
+ \item[Implemented.] A specific update or diagnostic exists in the pinned source.
+ This does not imply accuracy for all inputs.
+ \item[Verified in a limited sense.] A stated numerical property has test or run
+ evidence, with its fixture, tolerance and scope named.
+ \item[Assumed.] A geometry, constant, constitutive closure or behavior distribution
+ lacks the measurements needed to identify it for the intended household.
+ \item[Planned.] A mathematically motivated extension not executed by this version.
+\end{description}
+The example dimensions and masses are synthetic. No real cat identities,
+per-cat video measurements, pellet distributions or clean-surrogate material
+measurements are supplied. A steel-box product name does not determine actual
+slot geometry, tolerances, packing fraction, friction or wet behavior.
+
+\subsection{Notation and units}
+All solver quantities use SI units; plots sometimes display mm, ms or $\mu$J.
+Bold lower-case symbols are vectors, bold upper-case symbols are matrices, and
+$A:B=\operatorname{tr}(A^TB)$ is the Frobenius inner product.
+$\operatorname{dev}A=A-\tfrac13\operatorname{tr}(A)\mathbf I$.
+
+\begin{center}\small
+\begin{tabularx}{\linewidth}{lXl}
+\toprule
+Symbol & Meaning & Units\\
+\midrule
+$h,\Delta t$ & Research grid spacing and integration step & m, s\\
+$m_p,V_{0p},J$ & Material-point mass, reference volume, volume ratio & kg, m$^3$, 1\\
+$\rho_0,\rho$ & Reference and current density & kg/m$^3$\\
+$\mathbf C,\mathbf F_e$ & Affine velocity gradient; elastic deformation & s$^{-1}$, 1\\
+$\boldsymbol\sigma,\boldsymbol\tau$ & Cauchy and Kirchhoff stresses & Pa\\
+$G,K_b,E,\nu_P$ & Shear, bulk, Young's moduli; Poisson ratio & Pa, Pa, Pa, 1\\
+$\tau_y,K_s,n$ & Rheometer yield stress, consistency, flow index & Pa, Pa s$^n$, 1\\
+$\sigma_y,K_e$ & Equivalent-stress yield and consistency & Pa, Pa s$^n$\\
+$\mu,\eta,\nu$ & Contact friction; dynamic and kinematic viscosity & 1, Pa s, m$^2$/s\\
+\bottomrule
+\end{tabularx}
+\end{center}
+The household gravity magnitude is \SI{9.80665}{m.s^{-2}}; the research wire
+fixtures use \SI{9.81}{m.s^{-2}}. Worked examples below use the corresponding
+value. $\nu_P$ is Poisson ratio, distinct from kinematic viscosity $\nu$.
+
+\input{sections/household.tex}
+\input{sections/constitutive.tex}
+\input{sections/discretization.tex}
+\input{sections/verification.tex}
+
+\section{Computational contract, reproducibility, and acceptance gaps}
+\subsection{Execution and restart semantics}
+Python validates requests and delegates bulk JSON calls to the PyO3 native
+extension. Rust returns status, metrics, frames and full checkpoint state.
+Python publishes immutable run segments containing JSON, Parquet and Rerun
+artifacts, with configuration, code/build and dependency identity. Replay is
+served on loopback; its browser URL explicitly names the recording source.
+A rendered trajectory is an inspection tool, not a validation measurement.
+
+Resuming requires matching frozen request/provenance and compatible native and
+Python builds. Native restore validates physical/history/adaptive state as well
+as geometry and baseline ledgers. A checkpoint lacking required history is
+rejected instead of assigning unearned zero dissipation or limiter counts.
+Atomic exclusive publication prevents competing writers from silently replacing
+an existing run.
+
+Research jobs have a one-hour local per-job target budget. Checks are cooperative
+and include initialization/output budgeting, but do not preempt an expensive
+operation or guarantee an exact wall-clock cutoff during finalization. An
+incomplete run preserves a checkpoint and reports incompleteness. It must not
+quietly switch to cheaper constitutive laws. Resource caps are guards, not
+performance guarantees; a schema-valid request may still be infeasible.
+
+\subsection{Scaling calculation, not an extrapolated benchmark}
+For the \SI{20}{mm} cube with two points per cell per axis,
+\begin{equation}
+ N_p=\prod_{\alpha=1}^3\frac{L_\alpha}{h/2}
+       =\left(\frac{2L}{h}\right)^3.
+\end{equation}
+This gives 64, 512 and 4096 points at $h=10,5,2.5$ mm. A P2G/G2P sweep touches
+27 stencil nodes per point. Ignoring constants, occupied-grid work and output,
+\begin{equation}
+ \text{transfer work}\sim N_p\,\frac{T}{\Delta t};\qquad
+ \begin{cases}
+ O(h^{-4}),&\Delta t\propto h\text{ under an acoustic limit},\\
+ O(h^{-5}),&\Delta t\propto h^2\text{ under a viscous limit}.
+ \end{cases}
+\end{equation}
+Therefore halving $h$ can multiply this work by 16 or 32, not merely 8.
+Neither scaling law is a measured runtime prediction: active sparsity, cache
+behavior, return mapping, retries, sorting, contact and output all matter.
+The present household scheduler does not establish adaptive multi-day idle
+integration or actual-size runtime acceptance.
+
+\subsection{Explicitly unresolved physics and numerical acceptance}
+\begin{itemize}
+ \item Hydrostatic bottom-boundary accuracy and liquid per-particle pressure
+ noise remain unresolved. This document introduces no smoothing or weaker
+ acceptance metric to make them disappear.
+ \item Slump spatial spread and plastic-loss refinement fail the recorded
+ threshold. Domain-size and combined space-time studies are still missing.
+ \item The energy ledger is a mixed numerical diagnostic, not physical closure.
+ Coupled work, leakage and contact/transfer energy require further analysis.
+ \item Porous fines, capillary transport, absorption, wet fragmentation and
+ adhesion are not research continuum phases. Research fines are explicitly
+ unsupported; multiple research pellets are not implemented.
+ \item Household paste stresses, resolved spreading/reaction, calibrated slot
+ flux, measured settled packing, entrances/enclosures/pads and quantitative
+ burial/exposure metrics remain incomplete.
+ \item Per-cat motion/force identification, measured clean-surrogate validation,
+ held-out household predictions and a validated response bridge are absent.
+\end{itemize}
+These gaps delimit what can be inferred from the formal equations. Conservation,
+a successful compile, a smooth replay or a small synthetic fit residual cannot
+replace the missing acceptance evidence.
+
+\clearpage
+\appendix
+\section{Equation-to-code navigation}
+Links below pin the scientific source baseline, so later implementation changes
+do not silently alter the meaning of the derivations. More detailed symbol
+mappings appear next to the corresponding sections.
+
+\small
+\begin{longtable}{>{\raggedright\arraybackslash}p{.29\linewidth}>{\raggedright\arraybackslash}p{.65\linewidth}}
+\toprule
+Formal component & Source and role\\
+\midrule\endhead
+State map \eqref{eq:state-map}, inputs &
+\source{python/litter_physics/models.py}: requests and domain validation.
+\source{core/src/lib.rs}: native mode dispatch.\\[.6em]
+Rigid geometry and contacts, \eqref{eq:pellet-inertia}--\eqref{eq:dem-step} &
+\source{core/src/dem.rs}: multisphere geometry, forces, history, integration and slots.\\[.6em]
+Uptake/damage/swelling, \eqref{eq:uptake}--\eqref{eq:swelling} &
+\source{core/src/household.rs}: stateful boxes, events and moisture histories.\\[.6em]
+Reduced transport, \eqref{eq:drainage} &
+\source{core/src/household/field.rs}: free water, fines, occupancy and drawer flux.\\[.6em]
+Paste and liquid constitutive laws &
+\source{core/src/mpm/constitutive.rs}: material conversion, local return and EOS.\\[.6em]
+Stencil and transfers, \eqref{eq:weights}--\eqref{eq:g2p} &
+\source{core/src/mpm/grid.rs}, \source{core/src/mpm/particles.rs},
+\source{core/src/mpm/solver.rs}: grid support, particle history and stepping.\\[.6em]
+Rigid impulse exchange, \eqref{eq:coupling-impulse} &
+\source{core/src/mpm/rigid.rs}: research pellet, wall contact and grid coupling.\\[.6em]
+Research residuals, \eqref{eq:wall-energy}--\eqref{eq:energy-residual} &
+\source{core/src/mpm/solver.rs}: signed energy channels and state validation.
+\source{core/src/research.rs}: closed-wire-fixture checks and checkpoint restore.\\[.6em]
+Fixtures and observables, \eqref{eq:surface-proxies} &
+\source{core/src/mpm/fixtures.rs}: initialization, surface proxies and diagnostic reference fields.\\[.6em]
+Refinement criterion, \eqref{eq:refinement} &
+\source{python/litter_physics/verification.py}: case plans, fail-closed evidence and verdicts.\\[.6em]
+Behavior and empirical calibration &
+\source{python/litter_physics/behavior.py},
+\source{python/litter_physics/calibration.py}: visit distributions, fits and evidence labels.\\[.6em]
+Response interpolation, \eqref{eq:interpolation} &
+\source{python/litter_physics/response_tables.py}: standalone evidence-bounded interpolation,
+not native dynamics.\\[.6em]
+Run artifacts and replay &
+\source{python/litter_physics/runner.py},
+\source{python/litter_physics/artifacts.py},
+\source{python/litter_physics/provenance.py},
+\source{python/litter_physics/viewer.py}: orchestration and inspection.\\
+\bottomrule
+\end{longtable}
+\normalsize
+
+\clearpage
+\section{Rebuilding the document and reproducing the experiment}
+From the repository root, with the locked Python environment and Tectonic
+installed:
+\begin{verbatim}
+make manuscript
+uv run python docs/formal/build.py --check
+uv run litter-physics verify examples/verification_slump.yaml \
+    --out outputs/reproduce-formal-slump
+\end{verbatim}
+The build checks the archived report, generates deterministic CSV/LaTeX data,
+and compiles this PDF. Method diagrams are vector TikZ drawings; the kernel
+plot is analytic; Figure~\ref{fig:refinement} uses the archived native results.
+No new physics run is hidden inside document compilation. The baseline study's
+expected verification exit status is 1 (complete but unresolved), not 0.
+Fresh run directories must be empty. Exact wall times and PDF bytes need not
+match across platforms or tool versions; numerical data and provenance remain
+inspectable.
+
+The report's SHA-256 is
+\begin{center}\small\path{aa6030d7ea1af0919343d3c4732855bce3eecc3c69310a7babc116dc0015bce8}.\end{center}
+\path{docs/formal/README.md} documents compiler requirements, generated artifacts,
+checks and the intentional historical source pin.
+
+\begin{thebibliography}{9}
+\bibitem{cundall} P. A. Cundall and O. D. L. Strack.
+\emph{A discrete numerical model for granular assemblies}.
+G\'eotechnique, 1979. \url{https://doi.org/10.1680/geot.1979.29.1.47}.
+\bibitem{apic} C. Jiang, C. Schroeder, A. Selle, J. Teran and A. Stomakhin.
+\emph{The affine particle-in-cell method}.
+ACM Transactions on Graphics, 2015. \url{https://doi.org/10.1145/2766996}.
+\bibitem{mlsmpm} Y. Hu, Y. Fang, Z. Ge, Z. Qu, Y. Zhu, A. Pradhana and C. Jiang.
+\emph{A moving least squares material point method with displacement
+discontinuity and two-way rigid body coupling}.
+ACM Transactions on Graphics, 2018. \url{https://doi.org/10.1145/3197517.3201293}.
+\bibitem{foam} Y. Yue, B. Smith, C. Batty, C. Zheng and E. Grinspun.
+\emph{Continuum Foam}. ACM Transactions on Graphics, 2015.
+\url{https://doi.org/10.1145/2751541}.
+\bibitem{pashias} N. Pashias, D. V. Boger, J. Summers and D. J. Glenister.
+\emph{A fifty cent rheometer for yield stress measurement}.
+Journal of Rheology, 1996. \url{https://doi.org/10.1122/1.550780}.
+\end{thebibliography}
+\end{document}

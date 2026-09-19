@@ -1,0 +1,224 @@
+\section{Verification observables and actual refinement evidence}
+\label{sec:verification}
+\subsection{What the fixture observables measure}
+The particle spacing at initialization is $s_p=h/2$. The reported surface
+proxies are
+\begin{equation}
+ H_h=\max_p z_p+s_p/2,\qquad
+ B_{x,h}=\max_p x_p-\min_p x_p+s_p,\qquad S_h=H_0-H_h.
+ \label{eq:surface-proxies}
+\end{equation}
+These estimate height, horizontal extent and slump using particle extrema plus
+an \emph{initial} spacing correction. They are not reconstructed deformed
+particle surfaces or a continuum free-surface mesh. They can therefore have
+quadrature and surface-estimation error in addition to solver error.
+
+The hydrostatic error metrics compare every particle, including those next to
+the bottom boundary, to the phase-appropriate reference in
+Section~\ref{sec:constitutive}:
+\begin{equation}
+ e_{\rm rms}=\left[\frac1{N_p}\sum_p
+ \left(\frac{q_p-q_{\rm ref}(z_p)}{\rho_0gH_0}\right)^2\right]^{1/2},
+ \qquad e_{\max}=\max_p\frac{|q_p-q_{\rm ref}(z_p)|}{\rho_0gH_0}.
+\end{equation}
+For liquid $q=p$ is pressure; for paste it is negative vertical Kirchhoff stress.
+Removing bottom-row particles or smoothing per-particle liquid pressure would
+change the acceptance question, not solve the observed accuracy problem.
+The archived dataset below contains slump results only; it establishes no
+hydrostatic-pressure convergence claim.
+
+The code also reports a cylinder-slump sanity estimate \cite{pashias},
+\begin{equation}
+ Y=\frac{\tau_y}{\rho_0gH_0},\qquad
+ \frac{S_{\rm cyl}}{H_0}=1-2Y[1-\ln(2Y)],\quad 0<Y<\tfrac12.
+\end{equation}
+It uses zero slump for $Y\geq1/2$ and $H_0$ for $Y\leq0$.
+For $\tau_y=\SI{30}{Pa}$, $\rho_0=\SI{1000}{kg.m^{-3}}$,
+$H_0=\SI{20}{mm}$ and $g=\SI{9.81}{m.s^{-2}}$, $Y\simeq0.152905$ and
+$S_{\rm cyl}\simeq\SI{6.63737}{mm}$. The simulated block is a \emph{cube},
+with finite elasticity, wall friction and time-dependent rheology. A mismatch
+with this cylinder estimate is not by itself a validated error measure for
+that different problem.
+
+\subsection{Separate spatial and temporal experiments}
+For observable $Q$ at three or more successively finer resolutions, the
+implemented criterion computes
+\begin{equation}
+ \epsilon_k=\frac{|Q_k-Q_{k-1}|}{\max(|Q_k|,Q_{\rm scale})},\qquad
+ \epsilon_{\rm final}<0.05. \label{eq:refinement}
+\end{equation}
+A finest value below $Q_{\rm scale}$ is \emph{uninformative}, not a pass. The
+threshold is strict. Missing/nonfinite values, incomplete runs, changed fidelity,
+wrong final times, adaptive limiting, rejected steps and budget overruns prevent
+passing claims. The spatial axis holds the requested timestep fixed; the temporal
+axis holds $h$ fixed and requires increasing actual step counts.
+
+Three values can expose a failure to resolve an observable, but a small final
+change does not prove asymptotic convergence. For equal refinement ratio $r$,
+\begin{equation}
+ p_{\rm obs}=\frac{\ln\left(|Q_0-Q_1|/|Q_1-Q_2|\right)}{\ln r}
+\end{equation}
+is merely a trend diagnostic without a verified leading-error expansion.
+Neither Richardson extrapolation nor a formal discretization uncertainty bound
+is claimed by this study.
+
+The frozen run uses \path{examples/research_slump.yaml}, modified only by the
+study axes in \path{examples/verification_slump.yaml}: a \SI{20}{mm} cube in a
+\SI{60}{mm} domain, $\rho_0=\SI{1000}{kg.m^{-3}}$, $E=\SI{1000}{Pa}$,
+$\nu_P=0.2$, $\tau_y=\SI{30}{Pa}$, $K_s=\SI{10}{Pa.s^{0.6}}$,
+$n=0.6$, seed 7, final time \SI{0.5}{s}. All material values are synthetic.
+The undeformed block mass is \SI{\BlockMassGrams}{g}, with continuum initial
+potential energy $mgH_0/2=\SI{\BlockPotentialMillijoules}{mJ}$.
+Non-hydrostatic fixtures add bounded position jitter of amplitude $0.1s_p$;
+therefore the discrete initial potential energy differs slightly from this
+integral. Spatial refinement also refines particle quadrature and jitter
+amplitude; it is not a grid-only experiment with fixed material points.
+
+\begin{table}[htbp]
+\centering\small
+\input{generated/cases.tex}
+\caption{Actual compiled-kernel results at \SI{0.5}{s}, source revision
+\nolinkurl{9a66a55}. Every case completed with zero limited and rejected steps.
+Times and lengths here are requested caps/grid scales and measured final
+surface proxies, respectively.}
+\label{tab:cases}
+\end{table}
+
+\begin{figure}[p]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=3 by 2,horizontal sep=1.5cm,vertical sep=2cm},
+ width=.295\textwidth,height=.25\textheight,
+ xmode=log,log basis x=2,x dir=reverse,grid=major,
+ tick label style={font=\footnotesize},label style={font=\small},
+ title style={font=\small},scaled ticks=false]
+\nextgroupplot[title={Slump},xlabel={$h$ (mm)},ylabel={mm},xtick={10,5,2.5},
+ xticklabels={10,5,2.5}]
+\addplot+[blue!75!black,mark=*,thick] table[x=h_mm,y=slump_mm,col sep=comma]{generated/spatial.csv};
+\nextgroupplot[title={Horizontal spread},xlabel={$h$ (mm)},ylabel={mm},xtick={10,5,2.5},
+ xticklabels={10,5,2.5}]
+\addplot+[blue!75!black,mark=*,thick] table[x=h_mm,y=spread_mm,col sep=comma]{generated/spatial.csv};
+\nextgroupplot[title={Plastic-loss estimate},xlabel={$h$ (mm)},ylabel={$\mu$J},xtick={10,5,2.5},
+ xticklabels={10,5,2.5}]
+\addplot+[blue!75!black,mark=*,thick] table[x=h_mm,y=plastic_uj,col sep=comma]{generated/spatial.csv};
+\nextgroupplot[xlabel={$\Delta t$ (ms)},ylabel={mm},xtick={.4,.2,.1},
+ xticklabels={0.4,0.2,0.1}]
+\addplot+[orange!85!black,mark=square*,thick] table[x=dt_ms,y=slump_mm,col sep=comma]{generated/temporal.csv};
+\nextgroupplot[xlabel={$\Delta t$ (ms)},ylabel={mm},xtick={.4,.2,.1},
+ xticklabels={0.4,0.2,0.1}]
+\addplot+[orange!85!black,mark=square*,thick] table[x=dt_ms,y=spread_mm,col sep=comma]{generated/temporal.csv};
+\nextgroupplot[xlabel={$\Delta t$ (ms)},ylabel={$\mu$J},xtick={.4,.2,.1},
+ xticklabels={0.4,0.2,0.1}]
+\addplot+[orange!85!black,mark=square*,thick] table[x=dt_ms,y=plastic_uj,col sep=comma]{generated/temporal.csv};
+\end{groupplot}
+\end{tikzpicture}
+\caption{Frozen simulation evidence, \emph{not} illustrative curves. Top row:
+spatial refinement at fixed $\Delta t=\SI{0.05}{ms}$. Bottom row: temporal
+refinement at fixed $h=\SI{5}{mm}$. Each axis becomes finer to the right;
+lines connect only the three observed values and are not fitted convergence
+curves. Vertical axes are independent between panels. The study remains
+unresolved because spread and plastic loss fail the specified final-two tests.}
+\label{fig:refinement}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\input{generated/verdicts.tex}
+\caption{Final-two relative changes computed with \eqref{eq:refinement}.
+Required: each listed value strictly below 5\%. Near-zero scales are
+\SI{0.5}{mm} for lengths and \SI{1}{\micro J} for plastic loss.}
+\label{tab:verdicts}
+\end{table}
+
+At $h=\SI{5}{mm}$ and $\Delta t=\SI{0.1}{ms}$, the recorded values include
+\begin{align}
+ E_N&=-\SI{109.379}{\micro J}, &D_F&=\SI{35.486}{\micro J},\\
+ D_P&=\SI{173.886}{\micro J}, &r_E&=\SI{84.476}{\micro J}.
+\end{align}
+The nonzero diagnostic is retained. It is neither a pass of energy closure nor
+an external-wall-work measurement. The six-case study took approximately
+\SI{11.86}{s} on the producing arm64, 10-core, 16 GiB machine, measured through
+report evaluation (not the final report write). This is a tiny-fixture timing,
+not evidence for full-box or multi-day feasibility.
+
+\paragraph{Implementation mapping and evidence identity.}
+\path{core/src/mpm/fixtures.rs}: \nolinkurl{FixtureSpec::shape_observables},
+\nolinkurl{slump_observables}, \nolinkurl{hydrostatic_observables}.
+\path{python/litter_physics/verification.py}: \nolinkurl{plan_cases},
+\nolinkurl{evaluate_observable}, \nolinkurl{evaluate_axis}, \nolinkurl{run_study}.
+The verbatim archived report is \path{docs/formal/data/refinement-report.json};
+its source commit, clean-tree flag, native/Python hashes, dependency versions,
+hardware, all case values and unresolved verdicts are retained. The manuscript
+build verifies the archive's SHA-256 before extracting any plot or table data.
+
+\section{Calibration, reduced responses, and uncertainty}
+\label{sec:calibration}
+\subsection{What can currently be fitted}
+The Python calibration module contains bounded empirical fits including
+\begin{equation}
+ U(t)=C[1-e^{-k_ut}],\qquad B(t)=1-e^{-k_bt},\qquad
+ \tau(\dot\gamma)=\tau_y+K_s\dot\gamma^n.
+\end{equation}
+Tilt observations supply a friction prior based on $\tan\theta$; they do not
+uniquely identify all multisphere sliding, rolling and shape parameters.
+Visit observations fit stage statistics and can be held out for personalization
+scoring. Synthetic observations remain explicitly synthetic; fit recovery from
+synthetic data cannot identify a real cat or material.
+
+There is an important model discrepancy: the fitted breakup fraction $B(t)$
+is exponential, whereas the household runtime uses the accumulated,
+whole-pellet threshold in \eqref{eq:damage}. Transferring $k_b$ between them does
+not automatically calibrate the distribution of actual breakup times. A
+simulator-based likelihood, an explicit heterogeneous threshold population, or
+measured justification of the reduction is still needed. Likewise, fitting a
+flow curve alone does not identify bulk elasticity, adhesion or porosity.
+
+A prospective joint inverse problem can be written
+\begin{equation}
+ \widehat{\boldsymbol\theta}=\arg\min_{\boldsymbol\theta\in\Theta}
+ \sum_j\frac{[\mathcal H_j(\mathcal S(\boldsymbol\theta))-y_j]^2}
+                 {s_j^2}+\mathcal R(\boldsymbol\theta), \label{eq:inverse}
+\end{equation}
+where $\mathcal S$ is the simulator, $\mathcal H_j$ the measurement operator,
+$y_j$ data, $s_j$ uncertainty/repeatability, and $\mathcal R$ a justified prior.
+\textbf{Equation~\eqref{eq:inverse} is a proposed formulation, not an implemented
+end-to-end inference engine.} Current functions fit the separate empirical
+curves; unidentifiable parameter combinations must not be hidden by a low
+training residual.
+
+\subsection{Intended research-to-household response interface}
+The implemented standalone response-table class provides bounded multilinear
+interpolation on a full Cartesian grid. For a cell with lower/upper axis values
+$x_j^-,x_j^+$, set $\lambda_j=(x_j-x_j^-)/(x_j^+-x_j^-)$:
+\begin{equation}
+ \widehat R(\mathbf{x})=\sum_{\mathbf b\in\{0,1\}^d}
+ R_{\mathbf b}\prod_{j=1}^d
+       \lambda_j^{b_j}(1-\lambda_j)^{1-b_j}. \label{eq:interpolation}
+\end{equation}
+Inside the cell the weights are nonnegative and sum to one. For example, a
+hypothetical two-axis cell at $(\lambda_1,\lambda_2)=(1/4,1/2)$ has weights
+$(3/8,1/8,3/8,1/8)$ under a compatible corner ordering. Interpolation is exact
+for multilinear data, not for arbitrary nonlinear coupled material behavior.
+
+The class validates grid completeness, units/physical bounds and evidence
+provenance. It refuses absent/synthetic evidence and extrapolation by default;
+explicit exploratory extrapolation is bounded to 10\% of each axis span and
+still subject to response bounds. This mechanism does \emph{not} produce
+validated evidence. No physical response tables are shipped, and neither native
+mode currently consumes these tables. The dashed bridge in
+Figure~\ref{fig:architecture} is intentionally not an implemented feedback loop.
+
+A defensible future acceptance chain is: constitutive/balance tests; independent
+space, timestep and domain-size studies; clean-surrogate measurements with
+held-out errors no greater than 20\% or measured repeatability; then evidence-
+qualified response reduction and measured household tests. Material variation,
+parameter uncertainty, numerical error and behavior variability must be reported
+separately. A confidence interval on a fitted parameter does not absorb unknown
+model discrepancy.
+
+\paragraph{Implementation mapping.}
+\path{python/litter_physics/calibration.py}: \nolinkurl{fit_uptake},
+\nolinkurl{fit_breakup}, \nolinkurl{fit_rheology}, \nolinkurl{friction_prior},
+\nolinkurl{score_personalization}, \nolinkurl{apply_bundle}.
+\path{python/litter_physics/response_tables.py}: \nolinkurl{ResponseTable},
+\nolinkurl{Axis}, \nolinkurl{Evidence}, \nolinkurl{Evaluation}.

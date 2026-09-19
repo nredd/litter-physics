@@ -39,3 +39,11 @@ checkpoint-domain gaps and misleading energy-ledger semantics, now regression-te
 (`energy-ledgers.md`); energy acceptance remains open. It also reported hydrostatic
 boundary errors and liquid pressure noise that remain acceptance blockers. A bounded
 review and conservation tests do not establish research-grade accuracy.
+
+The formal manuscript (`formal/simulation.pdf`, scientific baseline `9a66a55`)
+maps equations to implementation and preserves the unresolved refinement data.
+Its derivation also makes model discrepancies explicit: household swelling leaves
+sphere offsets fixed and deposits dry-reference occupancy; incoming-water momentum
+is not resolved; and the fitted exponential breakup fraction is not the runtime's
+accumulated-damage threshold law. None is repaired by documenting it. The isolated
+plastic-return energy gap is derived and tested, not mistaken for full energy closure.

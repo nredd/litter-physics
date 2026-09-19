@@ -108,3 +108,22 @@ energy_residual_j               =  8.447562054407812e-5
 ```
 
 The nonzero residual is reported, not relabelled as an energy-conservation pass.
+
+## Formal manuscript evidence
+
+`docs/formal/simulation.pdf` and its LaTeX source pin the scientific implementation
+at `9a66a55`. The manuscript archives the original six-case report and generates
+its plots/tables from checksum-verified evidence. A fresh compiled-kernel study
+reproduced every archived native observable and refinement verdict exactly; it
+completed but remained unresolved, with the expected exit status 1.
+
+The manuscript gate passed 81 Rust unit tests, 4 Rust integration tests and 151
+Python tests, with formatting/lint/types, Rust docs and schema checks clean.
+The installed-package tests also passed all 151 cases on Python 3.12 and 3.14.
+Two new native tests verify the worked paste return/energy-gap calculation and
+liquid EOS/first-order volume update, including inverted-volume rejection.
+Python tests independently evaluate the scalar return and archived verdicts and
+exercise tampered evidence, stale generated data and typesetting-error detection.
+Tectonic 0.17.0 compiles the PDF without warnings; rendered pages were inspected.
+These checks validate the document's calculations and provenance, not the missing
+physical energy closure or measured material/household accuracy.

@@ -1,0 +1,260 @@
+\section{Research continuum balances and MLS-MPM discretization}
+\label{sec:mpm}
+Research fixtures solve \emph{one} continuum phase (paste or liquid), optionally
+coupled to one rigid pellet. They do not yet solve a mixture of water, fines and pellets.
+For current density $\rho$, velocity $\mathbf{v}$ and Cauchy stress
+$\boldsymbol\sigma$, the local balances motivating the discretization are
+\begin{equation}
+ \frac{D\rho}{Dt}+\rho\nabla\cdot\mathbf{v}=0,\qquad
+ \rho\frac{D\mathbf{v}}{Dt}=\nabla\cdot\boldsymbol\sigma+\rho\mathbf{g}.
+ \label{eq:continuum-balance}
+\end{equation}
+The reference-volume stress is Kirchhoff stress,
+$\boldsymbol\tau=J\boldsymbol\sigma$, where $J$ is current volume divided by
+reference volume. The constitutive history is phase dependent: paste stores an
+elastic deformation tensor; liquid stores a scalar volume ratio. Neither
+phase stores the full multiphase state of the intended porous material.
+
+\subsection{Particle and grid variables}
+A material point $p$ stores $m_p$, $V_{0p}$, $\mathbf{x}_p$, $\mathbf{v}_p$,
+an affine velocity matrix $\mathbf{C}_p$, stress and constitutive history.
+The regular grid has spacing $h$ and positions $\mathbf{x}_i$. Material points
+carry history across steps; grid mass and momentum are rebuilt each step.
+The affine representation approximates local velocity as
+\begin{equation}
+ \mathbf{v}(\mathbf{x})\simeq
+ \mathbf{v}_p+\mathbf{C}_p(\mathbf{x}-\mathbf{x}_p).
+\end{equation}
+This reduces the loss of rotational/local linear motion characteristic of plain
+particle-in-cell transfer \cite{apic}. It does not guarantee energy conservation.
+
+Let $q=|r|$ for normalized distance $r=(x_i-x_p)/h$. The quadratic B-spline is
+\begin{equation}
+ N(r)=\begin{cases}
+  \tfrac34-r^2,&0\leq q<\tfrac12,\\
+  \tfrac12(\tfrac32-q)^2,&\tfrac12\leq q<\tfrac32,\\
+  0,&q\geq\tfrac32.
+ \end{cases}\qquad
+ w_{ip}=\prod_{\alpha=1}^3N\!\left(\frac{x_{i\alpha}-x_{p\alpha}}{h}\right).
+ \label{eq:weights}
+\end{equation}
+Each point uses a $3^3=27$ node stencil. With complete support,
+\begin{equation}
+ \sum_iw_{ip}=1,\quad \sum_iw_{ip}\mathbf{d}_{ip}=\mathbf{0},\quad
+ \sum_iw_{ip}\mathbf{d}_{ip}\mathbf{d}_{ip}^{T}=\tfrac{h^2}{4}\mathbf{I},
+ \qquad\mathbf{d}_{ip}=\mathbf{x}_i-\mathbf{x}_p. \label{eq:moment-identities}
+\end{equation}
+The last identity supplies the $4/h^2$ MLS factor, rather than a separately
+coded derivative of each shape function. Boundary padding preserves a full
+stencil for valid particles; leaving that padded grid is not silently accepted
+as an open boundary in the current closed wire fixtures.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=.49\textwidth,height=5.1cm,xlabel={$r=(x_i-x_p)/h$},
+ ylabel={$N(r)$},xmin=-1.6,xmax=1.6,ymin=0,ymax=.85,
+ xtick={-1.5,-.5,.5,1.5},grid=major,domain=-1.5:1.5,samples=151]
+ \addplot[blue!75!black,thick] {abs(x)<0.5 ? 0.75-x*x : 0.5*(1.5-abs(x))^2};
+\end{axis}
+\begin{scope}[shift={(10,1.8)},scale=.85,>=Latex,font=\small]
+ \draw[step=1,gray!45] (-1.3,-1.3) grid (1.4,1.4);
+ \foreach \x in {-1,0,1}{\foreach \y in {-1,0,1}{\fill[blue!60] (\x,\y) circle (.065);}}
+ \fill[orange!90!black] (.23,.35) circle (.09);
+ \foreach \x in {-1,0,1}{\foreach \y in {-1,0,1}{\draw[orange!60,thin] (.23,.35)--(\x,\y);}}
+ \node[anchor=west] at (.45,.55) {$p$};
+ \draw[<->] (-1,-1.65)--node[below]{$h$}(0,-1.65);
+ \node[align=center] at (0,2) {2D stencil slice\\9 nodes shown; 27 in 3D};
+\end{scope}
+\end{tikzpicture}
+\caption{Analytical interpolation kernel and an illustrative stencil slice.
+These are method diagrams, not simulation output. Exactly zero-weight stencil
+entries must not create duplicate active grid nodes.}
+\label{fig:kernel}
+\end{figure}
+
+\subsection{Particle-to-grid transfer and explicit stress force}
+The implemented MLS-MPM transfer \cite{mlsmpm} combines affine momentum and an
+explicit stress impulse:
+\begin{align}
+ m_i&=\sum_pw_{ip}m_p,\\
+ \mathbf{p}_i^*&=\sum_pw_{ip}\left[m_p\mathbf{v}_p+
+ \left(m_p\mathbf{C}_p-\Delta t\frac4{h^2}V_{0p}\boldsymbol\tau_p\right)
+          \mathbf{d}_{ip}\right], \label{eq:p2g}\\
+ \mathbf{v}_i^*&=\frac{\mathbf{p}_i^*}{m_i}+\Delta t\mathbf{g},\quad m_i>0.
+\end{align}
+In weak-form language the stress contribution is
+$-\Delta t\sum_pV_{0p}\boldsymbol\tau_p\nabla w_{ip}$ with the MLS gradient
+surrogate $\nabla w_{ip}\simeq(4/h^2)w_{ip}\mathbf{d}_{ip}$.
+Dimensional check: $V_0\tau$ has units of energy; multiplying by
+$\Delta t\,\mathbf{d}/h^2$ gives momentum.
+Equation~\eqref{eq:moment-identities} cancels internal stress impulses in the
+sum over nodes. That cancellation can fail in bookkeeping if an active node
+is processed twice; the zero-deposit regression explicitly guards this case.
+
+\subsection{Wall treatment, transfer back, and local update}
+At a wall with inward unit normal $\mathbf{n}$, let
+$v_n=\mathbf{v}^*\cdot\mathbf{n}$ and
+$\mathbf{t}=\mathbf{v}^*-v_n\mathbf{n}$. Only $v_n<0$ is constrained:
+\begin{equation}
+ \mathbf{v}^{N}=\mathbf{t},\qquad
+ \mathbf{v}^{+}=\mathbf{t}
+ \max\left(0,1-\frac{\mu(-v_n)}{\|\mathbf{t}\|}\right), \label{eq:wall-projection}
+\end{equation}
+with the sticking/zero-tangent case handled explicitly. Axis-aligned wall
+constraints are applied sequentially at corners. This is a nodal velocity
+projection with Coulomb tangential reduction. It is \emph{not} an incompressible
+pressure-Poisson solve and does not enforce a pointwise watertight surface.
+
+After wall and optional pellet coupling updates,
+\begin{align}
+ \mathbf{v}_p^{n+1}&=\sum_iw_{ip}\mathbf{v}_i^+,\\
+ \mathbf{C}_p^{n+1}&=\frac4{h^2}\sum_iw_{ip}\mathbf{v}_i^+
+                           \mathbf{d}_{ip}^{T}, \label{eq:g2p}\\
+ \mathbf{x}_p^{n+1}&=\mathbf{x}_p^n+\Delta t\,\mathbf{v}_p^{n+1}.
+\end{align}
+Paste uses the trial elastic tensor
+$\mathbf{F}_e^{\rm tr}=(\mathbf{I}+\Delta t\mathbf{C}_p^{n+1})\mathbf{F}_e^n$;
+liquid advances its scalar $J$ with $\operatorname{tr}\mathbf{C}_p^{n+1}$.
+The constitutive operations are given in Section~\ref{sec:constitutive}.
+A locally implicit plastic return does not make the global momentum step
+implicit: the stress in \eqref{eq:p2g} is the stored stress from the preceding
+accepted state.
+
+\subsection{Adaptive integration and transactional state}
+The research solver forms a heuristic upper bound
+\begin{equation}
+ \Delta t_{\rm stab}=\min\left\{
+ \frac{\mathrm{CFL}\,h}{c+\max_p\|\mathbf{v}_p\|},\quad
+ \frac{h^2}{4\nu},\quad 0.2\sqrt{m_r/k_n},\quad
+ \frac{\mathrm{CFL}\,h}{\|\mathbf{v}_r\|}\right\}, \label{eq:mpm-step}
+\end{equation}
+where viscous and rigid terms apply only when present/nonzero. Here $c$ is the
+material wave speed and $\nu$ the implementation's kinematic diffusivity.
+A recovery factor can reduce the candidate step further. Endpoint clipping
+then lands on the requested record/final time. Nonfinite state, constitutive
+failure or excessive displacement rejects the trial; the solver restores
+physical history and ledgers, halves the recovery scale and retries. A minimum
+step failure is reported instead of silently changing the physics.
+
+The checkpoint persists limiter/rejection history. A timestep-refinement case
+is not accepted merely because one step happened to reach the requested cap:
+\nolinkurl{limited_steps} counts accepted steps that were limited before endpoint
+clipping. This distinguishes the tested temporal axis from an adaptive method
+that actually reused the same smaller steps at every requested resolution.
+
+\paragraph{Implementation mapping.}
+\path{core/src/mpm/grid.rs}: \nolinkurl{GridLayout::stencil}, \nolinkurl{Stencil},
+\nolinkurl{Grid::deposit}. \path{core/src/mpm/particles.rs}: \nolinkurl{ParticleSet}.
+\path{core/src/mpm/solver.rs}: \nolinkurl{Simulation::particle_to_grid},
+\nolinkurl{grid_update}, \nolinkurl{grid_to_particle}, \nolinkurl{try_step},
+\nolinkurl{stability_limit} and \nolinkurl{advance_to}.
+\path{core/tests/grid_transfer.rs} tests zero-weight bookkeeping and momentum.
+
+\section{Single-pellet coupling and energy accounting}
+\label{sec:coupling}
+\subsection{Impulse exchange, not a porous-mixture closure}
+For a research pellet, the signed distance is the minimum distance to its
+multisphere union. A grid node inside that union is constrained only when its
+relative normal velocity is approaching. With node position $\mathbf{x}_i$,
+\begin{equation}
+ \mathbf{u}_r(\mathbf{x}_i)=\mathbf{v}_r+
+       \boldsymbol\omega_r\times(\mathbf{x}_i-\mathbf{x}_r),\qquad
+ \mathbf{u}_{\rm rel}=\mathbf{v}_i-\mathbf{u}_r(\mathbf{x}_i).
+\end{equation}
+Apply \eqref{eq:wall-projection} to $\mathbf{u}_{\rm rel}$, then add back
+$\mathbf{u}_r$. If $\Delta\mathbf{p}_i=m_i(\mathbf{v}_i'-\mathbf{v}_i)$ is
+the grid impulse, the pellet receives
+\begin{equation}
+ \Delta\mathbf{P}_r=-\sum_i\Delta\mathbf{p}_i,\qquad
+ \Delta\mathbf{L}_r=-\sum_i(\mathbf{x}_i-\mathbf{x}_r)\times\Delta\mathbf{p}_i.
+ \label{eq:coupling-impulse}
+\end{equation}
+Linear and angular action-reaction balance is explicit at this grid/pellet
+exchange. The body's start-of-step velocity is used for all constrained nodes,
+then the summed impulse updates the body. It is not a simultaneous finite-mass
+contact solve, and the two kinetic-energy changes need not cancel or sum to a
+nonpositive number. Resolution-dependent leakage, work accuracy and multiple
+research pellets remain acceptance gaps.
+
+The separate research pellet uses world angular momentum and cylinder inertia;
+wall contact is spring-dashpot/Coulomb contact rather than the grid projection.
+The two rigid-body implementations share concepts, not identical state formats
+or all contact-history details.
+
+\subsection{Species and linear momentum residuals}
+For household species $s\in\{\text{wood},\text{waste solids},\text{water}\}$,
+\begin{equation}
+ r_s=\sum_{c\in\{B,D,F,R,E\}}M_{s,c}
+   -M_{s,0}-M_{s,\rm added}. \label{eq:species-residual}
+\end{equation}
+The compartments are bed, drawer, floor, removed and evaporated, summed over
+boxes where appropriate. Reclassification of intact wood into fines is not a
+new source. The native check bounds each residual by
+$\max(\SI{1e-12}{kg},10^{-6}M_{s,\rm expected})$.
+This tests bookkeeping, not spatial distribution or transport accuracy.
+
+For the research continuum and optional pellet, let $\mathbf{P}$ be the sum of
+particle translational and pellet linear momentum. The diagnostic is
+\begin{equation}
+ \mathbf{r}_P=\mathbf{P}(t)+\mathbf{P}_{\rm out}(t)-\mathbf{P}(0)
+ -\mathbf{I}_g-\mathbf{I}_{\rm wall}-\mathbf{I}_{r,\rm wall}.
+\end{equation}
+The internal coupling impulse is not subtracted a second time. Current closed
+fixtures reject nonzero outflow even when it balances this ledger. Consequently,
+``mass conserved including escaped material'' cannot conceal a wall leak.
+
+\subsection{Why a stationary wall's projection loss is not external work}
+For one normal wall projection, record
+\begin{equation}
+ \Delta E_N=\tfrac12m_i(\|\mathbf{v}^{N}\|^2-\|\mathbf{v}^*\|^2)
+          =-\tfrac12m_i v_n^2\leq0,\qquad
+ \Delta D_F=\tfrac12m_i(\|\mathbf{t}\|^2-\|\mathbf{v}^{+}\|^2)\geq0.
+ \label{eq:wall-energy}
+\end{equation}
+Thus $\Delta K_{\rm grid}=\Delta E_N-\Delta D_F$ exactly, up to roundoff.
+A stationary wall has zero external boundary work, since its boundary velocity
+is zero. $E_N$ mixes impact-like kinetic loss with numerical operator splitting;
+calling it wall work is physically misleading.
+
+For example, a resting node given gravity velocity $-g\Delta t$ and then
+projected back to zero loses $m_i g^2\Delta t^2/2$ on the transient grid each
+step. Over duration $T$, this is $m_i g^2T\Delta t/2$, which vanishes linearly
+with timestep. It does not mean the stationary wall physically absorbed that
+amount of gravitational work from an unmoving particle.
+
+The recorded mechanical energy is
+\begin{equation}
+ E_{\rm mech}=\sum_p\left[\tfrac12m_p\|\mathbf{v}_p\|^2
+       -m_p\mathbf{g}\cdot\mathbf{x}_p+V_{0p}\Psi_p\right]
+       +K_r-m_r\mathbf{g}\cdot\mathbf{x}_r. \label{eq:mechanical-energy}
+\end{equation}
+Here $K_r$ includes rigid rotation, while the particle kinetic sum does
+\emph{not} include APIC affine kinetic modes. The accumulated diagnostic sum is
+\begin{align}
+ L_E&=E_N-D_F+W_{r,\rm contact}
+      +\Delta K_{\rm coupling,grid}+\Delta K_{\rm coupling,rigid}-D_P,\nonumber\\
+ r_E&=E_{\rm mech}(t)-E_{\rm mech}(0)-L_E. \label{eq:energy-residual}
+\end{align}
+$D_P\geq0$ is the constitutive plastic-loss estimate.
+$W_{r,\rm contact}$ is the start-of-step contact-force work estimate; it includes
+recoverable penalty-spring effects and is not pure dissipation. The coupling
+terms are measured kinetic changes, not an invented cancellation assumption.
+
+\textbf{Equation~\eqref{eq:energy-residual} is not a closed physical first law.}
+Missing terms include particle/grid transfer and affine energy, liquid viscous
+loss, complete contact spring/rotation bookkeeping and any outflow energy.
+Gravity discretization can also contribute a defect. A small $r_E$ alone could
+reflect cancellation; a nonzero value cannot simply be called conservation
+success. Future energy acceptance needs a consistently discretized balance,
+not a renaming of the residual.
+
+\paragraph{Implementation mapping.}
+\path{core/src/mpm/rigid.rs}: \nolinkurl{Pellet::signed_distance},
+\nolinkurl{couple_grid}, \nolinkurl{Pellet::apply_impulse}.
+\path{core/src/mpm/solver.rs}: \nolinkurl{Ledger},
+\nolinkurl{Ledger::ledgered_energy}, \nolinkurl{Simulation::energy_residual},
+\nolinkurl{Simulation::momentum_residual}.
+\path{core/src/research.rs}: \nolinkurl{check_closed_state} and restore validation.
+The restored initial mechanical-energy baseline is checked against a rebuilt
+initial state; missing histories are rejected rather than fabricated as zero.

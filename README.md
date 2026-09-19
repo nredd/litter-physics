@@ -71,6 +71,19 @@ personalization. Collect real observations using [docs/measurements.md](docs/mea
 Outputs carry these limitations. Small demo timings must not be extrapolated to a
 full box. See [implementation status](docs/status.md) and [verification evidence](docs/validation.md).
 
+## Formal model
+
+The [LaTeX manuscript](docs/formal/simulation.tex) and [PDF](docs/formal/simulation.pdf)
+derive the implemented mechanics, constitutive laws, transfers and ledgers, with worked
+calculations, vector figures, actual refinement plots and equation-to-code mappings.
+The scientific baseline is pinned to `9a66a55`; unresolved accuracy and planned physics
+are explicit. [Build instructions and evidence provenance](docs/formal/README.md).
+
+```sh
+brew install tectonic  # macOS; optional unless rebuilding the PDF
+make manuscript
+```
+
 ## Develop
 
 ```sh

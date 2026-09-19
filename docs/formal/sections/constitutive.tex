@@ -1,0 +1,276 @@
+\section{Constitutive models implemented in the research solver}
+\label{sec:constitutive}
+The paste law combines isotropic Hencky elasticity and a principal-frame
+viscoplastic return, following the general class of Herschel-Bulkley MPM models
+used for yield-stress materials \cite{foam}. The liquid law is a weakly
+compressible Newtonian approximation. The equations below describe this code,
+not all features of the cited methods and not measured fecal material.
+
+\subsection{Elastic constants, stresses, and shear-rheometer conventions}
+From Young's modulus $E$ and Poisson ratio $\nu_P$,
+\begin{equation}
+ G=\frac{E}{2(1+\nu_P)},\qquad
+ \lambda_L=\frac{E\nu_P}{(1+\nu_P)(1-2\nu_P)},\qquad
+ K_b=\lambda_L+\frac{2G}{3}=\frac{E}{3(1-2\nu_P)}.
+ \label{eq:moduli}
+\end{equation}
+The symbol $\lambda_L$ denotes the first Lam\'e parameter, not a principal
+stretch or interpolation weight. The wire contract uses rheometer shear values,
+\begin{equation}
+ \tau_{\rm shear}=\tau_y+K_s|\dot\gamma|^n,
+\end{equation}
+whereas the internal J2 law uses an equivalent deviatoric stress $q$ and
+equivalent plastic strain rate $\dot\varepsilon_p$. In simple shear,
+\begin{equation}
+ q=\sqrt{3}\,|\tau_{\rm shear}|,\qquad
+ \dot\varepsilon_p=\frac{|\dot\gamma_p|}{\sqrt{3}},\qquad
+ \boxed{\sigma_y=\sqrt{3}\,\tau_y,\quad K_e=3^{(1+n)/2}K_s}.
+ \label{eq:shear-conversion}
+\end{equation}
+Thus the internal law is $q=\sigma_y+K_e\dot\varepsilon_p^n$ during plastic
+flow. Treating the same numeric $K$ as both $K_s$ and $K_e$ would change the
+material. Moreover, the code's equivalent stress is formed from
+\emph{Kirchhoff} stress. Ordinary rheometer shear stress is a Cauchy stress;
+the identification above presumes $J\simeq1$. At finite volume change, Cauchy
+equivalent stress is $q/J$, so this is not an exact constant-Cauchy-yield law
+under arbitrary compression.
+
+\subsection{Trial Hencky strain and the scalar implicit return}
+Let $\mathbf F_e^n$ be the stored elastic tensor and $\mathbf C$ the new affine
+velocity gradient from the grid. Form
+\begin{align}
+ \mathbf F_e^{\rm tr}&=(\mathbf I+\Delta t\mathbf C)\mathbf F_e^n,\\
+ \mathbf b^{\rm tr}&=\mathbf F_e^{\rm tr}(\mathbf F_e^{\rm tr})^T
+   =\mathbf U\operatorname{diag}(\ell_1^2,\ell_2^2,\ell_3^2)\mathbf U^T,\\
+ e_i^{\rm tr}&=\ln\ell_i,\qquad
+ \bar e=\tfrac13\sum_i e_i^{\rm tr},\qquad
+ \mathbf e_d^{\rm tr}=\mathbf e^{\rm tr}-\bar e\mathbf 1.
+ \label{eq:hencky-trial}
+\end{align}
+The code diagonalizes $\mathbf b^{\rm tr}$ with a cyclic Jacobi eigensolver;
+it does not require a separately computed right singular basis. With
+$\mathbf s=\operatorname{dev}\boldsymbol\tau$,
+\begin{equation}
+ q_{\rm tr}=\sqrt{\tfrac32\mathbf s_{\rm tr}:\mathbf s_{\rm tr}}
+           =\sqrt{6}\,G\|\mathbf e_d^{\rm tr}\|.
+\end{equation}
+If $q_{\rm tr}\leq\sigma_y$, the state is elastic. Otherwise the discrete J2
+stress reduction and overstress law give
+\begin{equation}
+ q=q_{\rm tr}-3G\Delta\varepsilon_p,\qquad
+ \Delta\varepsilon_p=\Delta t
+       \left(\frac{q-\sigma_y}{K_e}\right)^{1/n}.
+\end{equation}
+Eliminating the increment yields the actual scalar residual
+\begin{equation}
+ \boxed{f(q)=q-q_{\rm tr}+3G\Delta t
+       \left(\frac{q-\sigma_y}{K_e}\right)^{1/n}=0},
+ \quad q\in[\sigma_y,q_{\rm tr}]. \label{eq:hb-return}
+\end{equation}
+For $K_e>0$, $n>0$ and $q_{\rm tr}>\sigma_y$,
+$f(\sigma_y)<0$, $f(q_{\rm tr})>0$, and in the bracket interior
+\begin{equation}
+ f'(q)=1+\frac{3G\Delta t}{nK_e}
+       \left(\frac{q-\sigma_y}{K_e}\right)^{1/n-1}>0.
+\end{equation}
+There is a unique root. The code takes a Newton step only if it is finite and
+strictly inside the updated bracket; otherwise it bisects. The stopping test
+uses either residual or bracket width below
+$10^{-12}\max(q_{\rm tr},\SI{1}{Pa})$, with a 200-iteration cap.
+The monotonicity argument explains robustness, but a finite floating-point
+iteration can still fail and trigger step rejection. $K_e=0$ instead uses the
+perfectly plastic result $q=\sigma_y$ directly.
+
+\subsection{Reconstructing the elastic tensor and estimating plastic loss}
+Set $\alpha=q/q_{\rm tr}$ in the yielded branch and $\alpha=1$ in the elastic
+branch. Then
+\begin{align}
+ \mathbf e^{n+1}&=\bar e\mathbf1+\alpha\mathbf e_d^{\rm tr},\\
+ \mathbf F_e^{n+1}&=\mathbf U\operatorname{diag}
+       \left(\frac{e^{e_1^{n+1}}}{\ell_1},
+             \frac{e^{e_2^{n+1}}}{\ell_2},
+             \frac{e^{e_3^{n+1}}}{\ell_3}\right)\mathbf U^T\mathbf F_e^{\rm tr},
+ \label{eq:hencky-reconstruction}\\
+ \boldsymbol\tau^{n+1}&=\mathbf U\operatorname{diag}
+       \left(2G e_i^{n+1}+\lambda_L\sum_j e_j^{\rm tr}\right)\mathbf U^T.
+\end{align}
+The sum of log strains is unchanged by the return, so plastic correction is
+isochoric. The stored tensor is the returned \emph{elastic} tensor, not a full
+accumulated deformation tensor or a separately stored plastic gradient.
+Inverted/nonfinite trial tensors, stretches below $10^{-6}$, eigensolver failure
+or nonfinite stress reject the trial rather than substituting an undeformed
+particle. The principal-frame return and the explicit kinematic trial remain
+discrete constitutive approximations.
+
+The reference-volume Hencky elastic energy used by the diagnostic is
+\begin{equation}
+ \Psi_e=G\sum_i e_i^2+\frac{\lambda_L}{2}\left(\sum_i e_i\right)^2
+       =G\|\mathbf e_d\|^2+\frac{K_b}{2}(\operatorname{tr}\mathbf e)^2.
+\end{equation}
+The code accumulates the backward-Euler plastic-loss estimate
+\begin{equation}
+ \Delta D_P=V_0 q\Delta\varepsilon_p\geq0. \label{eq:plastic-loss}
+\end{equation}
+It is useful to distinguish this from the elastic energy released by the
+\emph{isolated radial-return operation}. Since $\Psi_{e,d}=q^2/(6G)$ and the
+volumetric part does not change,
+\begin{align}
+ \Delta\Psi_{e,\rm return}
+ &=\frac{q_{\rm tr}^2-q^2}{6G}
+   =\tfrac12(q_{\rm tr}+q)\Delta\varepsilon_p,\\
+ \Delta\Psi_{e,\rm return}-q\Delta\varepsilon_p
+ &=\tfrac32G(\Delta\varepsilon_p)^2. \label{eq:return-energy-gap}
+\end{align}
+This algebraic difference is nonnegative and quadratic in the increment. It is
+not a bound on the unknown full physical work history during an MPM step, nor
+does it account for transfers, walls or liquid viscosity. It illustrates why
+positive plastic loss alone does not close the global discrete energy budget.
+
+\subsection{Worked Herschel-Bulkley return}
+Use the synthetic slump parameters $E=\SI{1000}{Pa}$, $\nu_P=0.2$,
+$\tau_y=\SI{30}{Pa}$, $K_s=\SI{10}{Pa.s^{0.6}}$ and $n=0.6$.
+Equations~\eqref{eq:moduli} and \eqref{eq:shear-conversion} give
+\begin{align}
+ G&=\SI{416.6667}{Pa},&\lambda_L&=\SI{277.7778}{Pa},&K_b&=\SI{555.5556}{Pa},\\
+ \sigma_y&=\SI{51.96152}{Pa},&&K_e=\SI{24.08225}{Pa.s^{0.6}}.
+\end{align}
+For an illustrative trial $q_{\rm tr}=\SI{80}{Pa}$ and
+$\Delta t=\SI{1.4e-3}{s}$, the bracket endpoints give
+$f(\sigma_y)\simeq-\SI{28.0385}{Pa}$ and
+$f(q_{\rm tr})\simeq\SI{2.25493}{Pa}$.
+The scalar solution is
+\begin{align}
+ q&\simeq\SI{\HBReturnedStress}{Pa},&
+ \Delta\varepsilon_p&\simeq\num{\HBPlasticIncrement},\\
+ \dot\varepsilon_p&\simeq\SI{1.139453}{s^{-1}},&
+ \alpha&\simeq0.97507446.
+\end{align}
+The unrounded bracketed calculation satisfies the stated residual tolerance.
+Equation~\eqref{eq:plastic-loss} gives
+$\Delta D_P/V_0=\SI{\HBDissipation}{J.m^{-3}}$, whereas the isolated return's
+elastic-energy decrease is \SI{\HBElasticDrop}{J.m^{-3}}.
+Their difference is approximately \SI{0.0015905}{J.m^{-3}}, or 1.28\% of the
+recorded plastic-loss estimate for this local example. These numbers do not
+represent a complete simulated slump step. The document generator independently
+bisects the same scalar equation to make this calculation reproducible.
+
+\paragraph{Implementation mapping.}
+\path{core/src/mpm/constitutive.rs}: \nolinkurl{Material::paste},
+\nolinkurl{Material::paste_from_shear_rheology},
+\nolinkurl{solve_herschel_bulkley_return}, \nolinkurl{symmetric_eigen3} and
+\nolinkurl{update_paste}. \path{core/src/mpm/solver.rs} multiplies the returned
+loss density by reference point volume and accumulates it only for accepted steps.
+
+\subsection{Weakly compressible liquid: EOS, viscosity, and volume update}
+For the liquid wire material \nolinkurl{water}, yield stress is zero and $n=1$;
+the consistency field acts as dynamic viscosity $\eta$. The pair $(E,\nu_P)$
+is merely a way to specify artificial $K_b=E/[3(1-2\nu_P)]$, not a claim that
+liquid has a static Young's modulus or shear elasticity. Define
+\begin{equation}
+ \rho=\frac{\rho_0}{J},\qquad
+ p=K_b\left(\frac1J-1\right)=K_b\left(\frac\rho{\rho_0}-1\right),\qquad
+ \mathbf D=\tfrac12(\mathbf C+\mathbf C^T).
+\end{equation}
+The actual discrete update and stress are
+\begin{align}
+ J^{n+1}&=J^n[1+\Delta t\operatorname{tr}\mathbf C],\label{eq:liquid-j}\\
+ \boldsymbol\tau^{n+1}&=-p^{n+1}J^{n+1}\mathbf I
+                  +2\eta J^{n+1}\operatorname{dev}\mathbf D.
+ \label{eq:liquid-stress}
+\end{align}
+The tensor-history slot is reset to identity for liquid; $J$ supplies volume
+history. There is no pressure projection, cavitation clamp or pore-pressure
+mixture coupling. Expanded states $J>1$ can produce negative EOS pressure.
+States with $J^{n+1}\leq10^{-6}$ or nonfinite values are rejected.
+
+Equation~\eqref{eq:liquid-j} is a first-order approximation to
+$\dot J=J\operatorname{tr}\nabla\mathbf v$, \emph{not}
+$J^n\det(\mathbf I+\Delta t\mathbf C)$. For $\mathbf C=-\mathbf I\,\si{s^{-1}}$,
+$J^n=1$ and $\Delta t=\SI{1e-3}{s}$, these expressions give $0.997000000$
+and $0.997002999$, respectively. The discrepancy is order $\Delta t^2$ per
+step; neither expression is the exact finite-time exponential for constant
+$\mathbf C$. No determinant replacement is silently assumed in this derivation.
+
+The liquid elastic-energy density is
+\begin{equation}
+ \Psi_l(J)=K_b(J-1-\ln J),\qquad
+ J\frac{d\Psi_l}{dJ}=K_b(J-1)=-pJ.
+\end{equation}
+This derivative agrees with the isotropic Kirchhoff stress. Viscous stress is
+computed, but its dissipated energy is not accumulated in the current global
+energy diagnostic. The continuum viscous power density would be
+$2\eta\operatorname{dev}\mathbf D:\operatorname{dev}\mathbf D$ per current volume;
+its consistent discrete integral remains a missing ledger term.
+
+\subsection{Hydrostatic initialization and artificial-compressibility scales}
+Let $d=H_0-z$ denote depth in the placed current configuration. For liquid,
+$dp/dd=\rho g$ and $p(0)=0$ give
+\begin{equation}
+ \frac{dp}{dd}=\rho_0g\left(1+\frac p{K_b}\right)
+ \quad\Longrightarrow\quad
+ p(d)=K_b\left(e^{\rho_0gd/K_b}-1\right),\qquad
+ J(d)=e^{-\rho_0gd/K_b}. \label{eq:liquid-hydrostatic}
+\end{equation}
+This is an exact \emph{continuum} hydrostatic solution for the specified EOS.
+A placed subcell of current volume $V$ is assigned $V_0=V/J$ and
+$m=\rho_0V_0$; assigning $m=\rho_0V$ instead would discard the compressible
+density profile. Accurate initial pressure values do not establish discrete
+force balance or time-evolved hydrostatic accuracy.
+
+Paste initialization instead uses a confined-compression reference, with
+$M=\lambda_L+2G$,
+\begin{equation}
+ s=-\frac{\rho_0gd}{M},\quad
+ \mathbf F_e=\operatorname{diag}(1,1,e^s),\quad
+ \boldsymbol\tau=\operatorname{diag}(\lambda_Ls,\lambda_Ls,Ms).
+ \label{eq:paste-hydrostatic}
+\end{equation}
+It matches the \emph{small-strain} vertical reference $-\tau_{zz}=\rho_0gd$.
+At finite strain, density is $\rho_0/e^s$ and Cauchy stress is
+$\boldsymbol\tau/e^s$, so this is not an exact finite-strain hydrostatic solution.
+It is also a prestressed initializer, not an equilibrium solve subject to the
+paste yield criterion. For the soft slump values and $H_0=\SI{20}{mm}$,
+$\rho_0gH_0/M\simeq0.177$, not an asymptotically small strain.
+
+The acoustic speeds used by the timestep heuristic are
+\begin{equation}
+ c_{\rm paste}=\sqrt{\frac{K_b+4G/3}{\rho_0}},\qquad
+ c_{\rm liquid}=\sqrt{\frac{K_b}{\rho_0}},\qquad
+ \nu_{\rm liquid}=\frac\eta{\rho_0}.
+\end{equation}
+Paste has zero explicit diffusivity in this heuristic because its viscous return
+is local/implicit; global kinematics and stress forces still have an acoustic
+step restriction. Increasing $K_b$ suppresses artificial compression while
+increasing acoustic cost. Useful scale checks are
+\begin{equation}
+ \epsilon_c=\frac{\rho_0gH_0}{K_b},\qquad
+ \mathrm{Ma}=\frac Uc,
+\end{equation}
+with small $\epsilon_c$ and Mach number desirable for a near-incompressible
+approximation, but neither a substitute for boundary and pressure verification.
+
+For $E=\SI{1e5}{Pa}$, $\nu_P=0.2$, $\rho_0=\SI{1000}{kg.m^{-3}}$,
+$\eta=\SI{1e-3}{Pa.s}$ and $H_0=\SI{10}{mm}$,
+\begin{align}
+ K_b&=\SI{\WaterBulkModulus}{Pa},&c&=\SI{\WaterSoundSpeed}{m.s^{-1}},\\
+ p(H_0)&=\SI{\WaterBottomPressure}{Pa},&J(H_0)&=\num{\WaterBottomRatio}.
+\end{align}
+The incompressible comparison is $\rho_0gH_0=\SI{98.1}{Pa}$; the artificial
+compression is about 0.176\%. With $h=\SI{2}{mm}$, CFL $=0.3$ and negligible
+speed, the acoustic limit is \SI{\WaterAcousticStep}{s}; the viscous limit
+$h^2/(4\nu)$ is \SI{1}{s}. A water-like bulk modulus of \SI{2.2e9}{Pa} at
+the same reference density would instead give $c\simeq\SI{1483}{m.s^{-1}}$
+and an acoustic limit near \SI{4.05e-7}{s}, about 199 times smaller. This cost
+tradeoff changes the modeled material; it is not a free numerical acceleration
+of identical water physics.
+
+\paragraph{Implementation mapping and unresolved accuracy.}
+\path{core/src/mpm/constitutive.rs}: \nolinkurl{Material::liquid},
+\nolinkurl{update_liquid}, \nolinkurl{liquid_pressure}, \nolinkurl{wave_speed} and
+\nolinkurl{diffusivity}. \path{core/src/mpm/fixtures.rs}:
+\nolinkurl{FixtureSpec::hydrostatic_state}, \nolinkurl{hydrostatic_reference} and
+\nolinkurl{place_particles}. \path{core/src/mpm/solver.rs}:
+\nolinkurl{Simulation::elastic_energy}. Existing audits report unresolved
+bottom-boundary hydrostatic error and timestep-insensitive per-particle liquid
+pressure noise. Initialization tests, correct EOS algebra and a converged local
+return do not resolve those spatial/discrete issues.

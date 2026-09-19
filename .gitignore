@@ -19,3 +19,10 @@ recordings/
 *.mov
 .env
 .DS_Store
+
+# LaTeX compiler intermediates (the formal PDF is intentionally tracked)
+docs/formal/*.aux
+docs/formal/*.log
+docs/formal/*.out
+docs/formal/*.toc
+docs/formal/*.synctex.gz

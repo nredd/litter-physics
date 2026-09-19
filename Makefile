@@ -1,4 +1,4 @@
-.PHONY: help install native format lint type test doc schema gate all
+.PHONY: help install native format lint type test doc manuscript schema gate all
 help: ## List commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-16s %s\n", $$1, $$2}'
 install: ## Install the locked native extension and Python environment
@@ -21,6 +21,8 @@ test: native ## Run native and Python tests, requiring the real extension
 	uv run pytest --require-native --cov=litter_physics --cov-report=term-missing
 doc: ## Build Rust documentation without warnings
 	RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --all-features
+manuscript: ## Rebuild the formal LaTeX manuscript and PDF (requires Tectonic)
+	uv run python docs/formal/build.py
 schema: ## Validate committed JSON schemas and examples
 	uv run pytest tests -k schema
 gate: lint type test doc schema ## Run the non-mutating repository gate
