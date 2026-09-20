@@ -36,6 +36,10 @@ use super::rigid::{ContactParams, Pellet, couple_grid};
 
 /// Steps between cache-locality particle sorts.
 const SORT_INTERVAL: u64 = 32;
+/// Wall distance, in cells, inside which a particle's mirror image reaches a
+/// free node: the image at `-d` has support `(-d - 1.5 dx, -d + 1.5 dx)`, which
+/// contains the first free node at `dx` only for `d < dx / 2`.
+const TRACTION_HALF_WIDTH_CELLS: f64 = 0.5;
 /// Growth factor of the step scale after an accepted step.
 const DT_RECOVERY: f64 = 1.25;
 
@@ -493,9 +497,12 @@ impl Simulation {
     /// Attempt one step of size `dt`; commit only on success.
     fn try_step(&mut self, dt: f64) -> Result<(), StepFailure> {
         self.sweep_outflow();
-        self.particle_to_grid(dt);
+        let traction_impulse = self.particle_to_grid(dt);
         let node_trials = self.grid_update(dt)?;
-        let mut wall = WallStep::default();
+        let mut wall = WallStep {
+            impulse: traction_impulse,
+            ..WallStep::default()
+        };
         for (slot, trial) in self.grid.active.iter().zip(&node_trials) {
             self.grid.momentum[*slot] = trial.velocity;
             wall.impulse += trial.wall_impulse;
@@ -537,8 +544,11 @@ impl Simulation {
         Ok(())
     }
 
-    /// APIC/MLS particle-to-grid transfer (serial, fixed order).
-    fn particle_to_grid(&mut self, dt: f64) {
+    /// APIC/MLS particle-to-grid transfer (serial, fixed order), followed by
+    /// the wall-traction transfer of [`Self::wall_traction_to_grid`].
+    ///
+    /// Returns: the wall-traction impulse delivered to the grid in kg m/s.
+    fn particle_to_grid(&mut self, dt: f64) -> Vector3<f64> {
         self.grid.clear();
         let layout = self.grid.layout;
         let dx2_inv = 4.0 / (layout.spacing * layout.spacing);
@@ -567,6 +577,152 @@ impl Simulation {
                 }
             }
         }
+        self.wall_traction_to_grid(dt)
+    }
+
+    /// Deposit the face-normal wall traction on free nodes whose particle
+    /// stencil is truncated by a domain wall.
+    ///
+    /// The MLS force `f_i = -(4/dx^2) sum_p V0_p tau_p w_ip (x_i - x_p)` is a
+    /// quadrature surrogate of `-∫ σ:∇N_i dV`; on the two-per-cell lattice its
+    /// balance along axis `a` at node `i` needs the `a`-column sum
+    /// `sum_p V_p w_ip (x_i - x_p)_a` to vanish, which fails by one missing
+    /// lattice column at the node one cell inside a wall (see
+    /// `docs/hydrostatic-balance.md`). The deficit is a lattice-completion
+    /// problem, not the continuum face integral `∫_Γ N_i σ n dA`, so it is
+    /// repaired in the surrogate's own terms: every particle within
+    /// [`TRACTION_HALF_WIDTH_CELLS`] of a wall face emits one image mirrored in
+    /// that face alone, and the image deposits only the face-normal component
+    /// of its MLS stress force plus its weight. The image stress is the
+    /// particle's normal stress `V σ_nn` continued across the face with the
+    /// normal momentum balance of material in contact with a stationary wall,
+    /// `∂σ_nn/∂n = -ρ g_n` (so `a_n = 0`). A tensile continuation emits no
+    /// image at all (no stress, no weight): a wall cannot pull. The deposit is
+    /// made only while the constraint is active, i.e. while the wall-plane
+    /// node with the same tangential index has an inward trial normal velocity
+    /// `p_i / m_i + g_n dt`, the same strict test [`Self::grid_update`] uses to
+    /// project it; that node is loaded by the same parent and receives no
+    /// normal component from any image, so the test is well defined and
+    /// separating material receives nothing. Nothing tangential is ever
+    /// deposited: a stress-free body falling or sliding past a wall receives
+    /// exactly nothing. An entry whose continued stress force plus image
+    /// weight points toward the wall is skipped: a pulling image is not a
+    /// reaction, so every booked reaction is inward and the total per node is
+    /// unilateral. Each booked reaction is recorded in [`Grid::traction`] and
+    /// [`Self::grid_update`] applies the Coulomb law with that budget on the
+    /// receiving node's tangential plane, so friction sees the total normal
+    /// reaction, projection plus images. Corners
+    /// need no multi-face image: the `a`-force lattice at a corner node is
+    /// real particles plus `a`-images, symmetric row by row, while the other
+    /// axis truncates stress and mass by the same factor.
+    ///
+    /// Images only reach nodes their parent already loaded, so no massless
+    /// node receives momentum, and the component is dropped at nodes that are
+    /// wall nodes along that axis: there the no-penetration projection is the
+    /// reaction, and the padding node one cell behind the wall carries
+    /// `w(1.25)` of a particle mass against the image's `w(0.75)` momentum.
+    ///
+    /// Limits: this is a nodal surrogate of the contact reaction, not an exact
+    /// traction. Material within half a cell of an approaching wall node is
+    /// treated as in contact (the projection already does so), stress-free
+    /// material arriving at a wall gets the half-cell layer weight as image
+    /// stress before real stress builds, and `∂σ_nn/∂n = -ρ g_n` drops the
+    /// tangential shear gradients. The normal balance holds for a liquid at
+    /// rest; its linear continuation still approximates a varying density. The work of this force on the grid is not
+    /// ledgered and folds into [`Simulation::energy_residual`].
+    ///
+    /// Returns: total traction impulse in kg m/s, booked as wall impulse.
+    fn wall_traction_to_grid(&mut self, dt: f64) -> Vector3<f64> {
+        let layout = self.grid.layout;
+        let extents = layout.extents();
+        let half_width = TRACTION_HALF_WIDTH_CELLS * layout.spacing;
+        let force_scale = -dt * 4.0 / (layout.spacing * layout.spacing);
+        let gravity = self.config.gravity;
+        let mut impulse = Vector3::zeros();
+        for p in 0..self.particles.len() {
+            let position = self.particles.position[p];
+            let mass = self.particles.mass[p];
+            let volume0 = self.particles.volume0[p];
+            for axis in 0..3 {
+                let face = if position[axis] < half_width {
+                    0.0
+                } else if position[axis] > extents[axis] - half_width {
+                    extents[axis]
+                } else {
+                    continue;
+                };
+                let mut image = position;
+                image[axis] = 2.0 * face - position[axis];
+                let Some(stencil) = layout.stencil(&image) else {
+                    continue;
+                };
+                // Wall-plane node along this axis and the inward normal sign.
+                let (plane, inward) = if face == 0.0 {
+                    (1, 1.0)
+                } else {
+                    (layout.cells[axis] + 1, -1.0)
+                };
+                // `V σ_nn` continued to the image point: `V0 τ_nn - ρ V g_n (x_g - x_p)_n`.
+                let normal_stress = self.particles.kirchhoff[p][(axis, axis)] * volume0
+                    - mass * gravity[axis] * (image[axis] - position[axis]);
+                if normal_stress >= 0.0 {
+                    // Tensile continuation: a wall cannot pull, so there is no
+                    // image material along this face and no image weight either.
+                    continue;
+                }
+                let weight_momentum = mass * gravity[axis] * dt;
+                for a in 0..3 {
+                    for b in 0..3 {
+                        for c in 0..3 {
+                            let coords = [
+                                stencil.base[0] + a,
+                                stencil.base[1] + b,
+                                stencil.base[2] + c,
+                            ];
+                            if layout.wall_side(axis, coords[axis]).is_some() {
+                                continue;
+                            }
+                            let weight = stencil.weight(a, b, c);
+                            if weight == 0.0 {
+                                continue;
+                            }
+                            // Active set: the constraint at the wall-plane node with
+                            // the same tangential coordinates must be approaching,
+                            // exactly as `grid_update` decides to project it. Its
+                            // normal momentum is untouched by image deposits.
+                            let mut plane_coords = coords;
+                            plane_coords[axis] = plane;
+                            let plane_index =
+                                layout.index(plane_coords[0], plane_coords[1], plane_coords[2]);
+                            let plane_mass = self.grid.mass[plane_index];
+                            if plane_mass <= 0.0 {
+                                continue;
+                            }
+                            let trial = self.grid.momentum[plane_index][axis] / plane_mass
+                                + gravity[axis] * dt;
+                            if trial * inward >= 0.0 {
+                                continue;
+                            }
+                            let distance = stencil.distance(a, b, c)[axis];
+                            // Inward-signed reaction; a net pull (weight beating a
+                            // vanishing continued stress) is not a wall reaction.
+                            let reaction = (normal_stress * distance * force_scale
+                                + weight_momentum)
+                                * weight
+                                * inward;
+                            if reaction <= 0.0 {
+                                continue;
+                            }
+                            let index = layout.index(coords[0], coords[1], coords[2]);
+                            if self.grid.deposit_reaction(index, axis, inward, reaction) {
+                                impulse[axis] += reaction * inward;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        impulse
     }
 
     /// Grid velocity update with gravity and Coulomb walls (node parallel).
@@ -574,7 +730,8 @@ impl Simulation {
         let layout = self.grid.layout;
         let gravity = self.config.gravity;
         let friction = self.config.wall_friction;
-        let (masses, momenta) = (&self.grid.mass, &self.grid.momentum);
+        let (masses, momenta, tractions) =
+            (&self.grid.mass, &self.grid.momentum, &self.grid.traction);
         let trials: Vec<Option<NodeTrial>> = self
             .grid
             .active
@@ -604,17 +761,28 @@ impl Simulation {
                     normal_projection_energy -= 0.5 * mass * normal_speed * normal_speed;
                     velocity[axis] = 0.0;
                     let tangential = velocity;
-                    let tangential_speed = tangential.norm();
-                    let reduction = friction * (-normal_speed);
-                    if tangential_speed <= reduction || tangential_speed < 1e-14 {
-                        velocity = Vector3::zeros();
-                    } else {
-                        velocity = tangential * ((tangential_speed - reduction) / tangential_speed);
-                    }
+                    velocity = reduce_tangential_velocity(tangential, friction * (-normal_speed));
                     // The Coulomb reduction shortens the tangential vector, so the
                     // impulse dotted with the midpoint velocity is the exact loss.
                     friction_dissipation +=
                         0.5 * mass * (tangential.norm_squared() - velocity.norm_squared());
+                }
+                // Coulomb budget of the wall reaction delivered by the traction
+                // transfer: the same law as above, on this node's tangential plane.
+                for axis in 0..3 {
+                    let reaction = tractions[index][axis];
+                    if reaction <= 0.0 {
+                        continue;
+                    }
+                    let normal = velocity[axis];
+                    let mut tangential = velocity;
+                    tangential[axis] = 0.0;
+                    let reduced =
+                        reduce_tangential_velocity(tangential, friction * reaction / mass);
+                    friction_dissipation +=
+                        0.5 * mass * (tangential.norm_squared() - reduced.norm_squared());
+                    velocity = reduced;
+                    velocity[axis] = normal;
                 }
                 Some(NodeTrial {
                     velocity,
@@ -874,6 +1042,20 @@ impl Simulation {
             }
         }
         Ok(())
+    }
+}
+
+/// Apply a nonnegative Coulomb speed budget without reversal or an artificial
+/// small-velocity cutoff. A zero budget leaves the tangent exactly unchanged.
+fn reduce_tangential_velocity(tangential: Vector3<f64>, reduction: f64) -> Vector3<f64> {
+    if reduction == 0.0 {
+        return tangential;
+    }
+    let speed = tangential.norm();
+    if speed <= reduction {
+        Vector3::zeros()
+    } else {
+        tangential * ((speed - reduction) / speed)
     }
 }
 
@@ -1223,7 +1405,7 @@ mod tests {
         );
         let mut reference = sim.clone();
         let dt = 1e-5;
-        reference.particle_to_grid(dt);
+        let _ = reference.particle_to_grid(dt);
         let trials = reference.grid_update(dt).expect("grid update");
         for (slot, trial) in reference.grid.active.iter().zip(trials) {
             reference.grid.momentum[*slot] = trial.velocity;

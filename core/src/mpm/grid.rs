@@ -217,6 +217,10 @@ pub struct Grid {
     pub mass: Vec<f64>,
     /// Node momentum in kg m/s (becomes velocity after the grid update).
     pub momentum: Vec<Vector3<f64>>,
+    /// Inward wall-reaction impulse per axis in kg m/s delivered to this free
+    /// node by the wall-traction transfer (non-negative); the Coulomb budget
+    /// of that reaction in the grid update.
+    pub(super) traction: Vec<Vector3<f64>>,
     /// Flat indices of nodes touched in the last transfer, in first-touch order.
     pub active: Vec<usize>,
 }
@@ -230,6 +234,7 @@ impl Grid {
             layout,
             mass: vec![0.0; n],
             momentum: vec![Vector3::zeros(); n],
+            traction: vec![Vector3::zeros(); n],
             active: Vec::new(),
         }
     }
@@ -239,6 +244,7 @@ impl Grid {
         for &index in &self.active {
             self.mass[index] = 0.0;
             self.momentum[index] = Vector3::zeros();
+            self.traction[index] = Vector3::zeros();
         }
         self.active.clear();
     }
@@ -254,6 +260,26 @@ impl Grid {
         }
         self.mass[index] += mass;
         self.momentum[index] += momentum;
+    }
+
+    /// Add a wall-reaction impulse of magnitude `inward_impulse >= 0` along
+    /// `axis` (signed by `inward`) to a node that already carries mass, and
+    /// record it as that node's Coulomb budget. Returns `false`, depositing
+    /// nothing, for a massless node, since momentum without mass would be an
+    /// infinite velocity.
+    pub(super) fn deposit_reaction(
+        &mut self,
+        index: usize,
+        axis: usize,
+        inward: f64,
+        inward_impulse: f64,
+    ) -> bool {
+        if self.mass[index] <= 0.0 {
+            return false;
+        }
+        self.momentum[index][axis] += inward_impulse * inward;
+        self.traction[index][axis] += inward_impulse;
+        true
     }
 
     /// Total momentum over active nodes (fixed order).
@@ -317,6 +343,23 @@ mod tests {
         }
         assert!(layout.stencil(&Vector3::new(-0.003, 0.0, 0.0)).is_none());
         assert!(layout.stencil(&Vector3::new(0.0, 0.0, 0.0231)).is_none());
+    }
+
+    #[test]
+    fn reaction_deposit_requires_mass_and_books_the_budget() {
+        let layout =
+            GridLayout::new([0.02, 0.02, 0.02], 0.002, 1_000_000).unwrap_or_else(|e| panic!("{e}"));
+        let mut grid = super::Grid::new(layout);
+        assert!(!grid.deposit_reaction(3, 0, 1.0, 1.0));
+        assert!(grid.active.is_empty());
+        assert_eq!(grid.momentum[3], Vector3::zeros());
+        grid.deposit(3, 2.0, Vector3::new(0.5, 0.0, 0.0));
+        assert!(grid.deposit_reaction(3, 0, -1.0, 1.0));
+        assert_eq!(grid.momentum[3], Vector3::new(-0.5, 0.0, 0.0));
+        assert_eq!(grid.traction[3], Vector3::new(1.0, 0.0, 0.0));
+        assert_eq!(grid.active, vec![3]);
+        grid.clear();
+        assert_eq!(grid.traction[3], Vector3::zeros());
     }
 
     #[test]

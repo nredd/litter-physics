@@ -123,7 +123,8 @@ pub fn run(request: &Value, resume: Option<&Value>) -> Result<Value, String> {
             "Single-phase paste mass is booked as waste; no mobile/bound-water split",
             "No porous fines, wet fragmentation, absorption, adhesion or response-table generation",
             "Dense padded grid with active-node updates; no sparse-block storage",
-            "Grid-level coupling conserves impulses; leakage and full coupled convergence remain unverified"
+            "Grid-level coupling conserves impulses; leakage and full coupled convergence remain unverified",
+            "Wall lattice completion is an approximate contact treatment; its normal grid work is unledgered and energy closure remains open"
         ]
     });
     if started.elapsed().as_secs_f64() >= typed.max_wall_time_s {

@@ -127,3 +127,64 @@ exercise tampered evidence, stale generated data and typesetting-error detection
 Tectonic 0.17.0 compiles the PDF without warnings; rendered pages were inspected.
 These checks validate the document's calculations and provenance, not the missing
 physical energy closure or measured material/household accuracy.
+
+
+## Wall-contact correction
+
+The wall-adjacent MLS quadrature lacked normal lattice support. Face-normal
+image reactions now use the wall-plane active set, reject pulling reactions,
+and contribute their own Coulomb budget. This is a nodal boundary approximation,
+not an exact contact solution; see `hydrostatic-balance.md` for the derivation,
+rejected variants, retained counterexamples and limits. Native output diagnostics
+explicitly flag its unledgered normal grid work and the missing energy closure.
+
+Integrated gate: **105 Rust tests and 153 Python tests**, no skips, 95% Python
+coverage, formatting/lint/types, Rust docs and schema checks clean. Installed-package
+tests passed all 153 cases on Python 3.12 and 3.14 as well as the gate's 3.13.
+The matched-resolution native regression is part of the normal gate, not ignored.
+Independent tests cover release, rotated walls/corners, slip/stick, vanishing
+normal reaction and exactly zero friction without an artificial velocity cutoff.
+
+Actual compiled CLI runs, original water column (`20 x 20 x 10 mm`, `h=2 mm`,
+`dt=50 us`, 4000 points, 10 ms simulated):
+
+```text
+max normalized pressure error: 0.2969891369 before -> 0.0115138566 after
+rms normalized pressure error: 0.0646332251 before -> 0.0034430221 after
+mass_residual_kg             = -8.673617379884035e-19
+momentum_residual_kg_m_s      =  4.770490026058286e-18
+energy_residual_j            =  1.4356728261000955e-6
+limited_steps = rejected_steps = 0
+wall_time_s                 =  0.218
+```
+
+Error uses **every** particle, normalized by `rho0 g H`; no smoothing or discarded
+wall layers. At 0.1 s the native maximum stays at 1.27%; with zero wall friction
+it is 1.00%, so the improvement does not require frictional damping.
+
+Both six-case CLI studies completed with zero limited/rejected steps and exit
+**1 (`unresolved`)**, not a convergence pass. Hydrostatic study: 3.48 s wall time;
+slump study: 11.83 s. Final-two relative changes:
+
+| study/axis | observable | relative change |
+| --- | --- | --- |
+| hydrostatic/spatial | max pressure error | 57.17% |
+| hydrostatic/spatial | rms pressure error | 101.11% |
+| hydrostatic/temporal | max pressure error | 30.23% |
+| hydrostatic/temporal | rms pressure error | 39.13% |
+| slump/spatial | slump height | 9.09% |
+| slump/spatial | spread | 9.72% |
+| slump/spatial | plastic dissipation | 36.56% |
+| slump/temporal | slump height | 2.67% |
+| slump/temporal | spread | 1.67% |
+| slump/temporal | plastic dissipation | 9.45% |
+
+Local reports: `outputs/wall-contact-final-hydrostatic-study/study_report.json`
+and `outputs/wall-contact-final-slump-study/study_report.json`. These are working-tree
+execution artifacts with provenance, not replacements for the manuscript archive.
+Reproduce with the committed `verification_hydrostatic_water.yaml` and
+`verification_slump.yaml` examples in fresh output directories.
+
+Free-surface pressure accuracy, contact range, pellet-surface coupling, energy
+closure and measured validation remain open. The `9a66a55` manuscript equations,
+frozen report and PDF are unchanged; its generated-data check still passes.

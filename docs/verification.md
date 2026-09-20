@@ -124,7 +124,7 @@ floor is `uninformative` under the relative-change rule, not proof of convergenc
 Use the raw analytic errors and a separately stated accuracy tolerance when assessing
 the hydrostatic solution; `verify` exit 0 alone cannot establish it.
 
-## Executed evidence
+## Historical executed evidence (before wall lattice completion)
 
 Apple M4 Mac mini, 16 GB, macOS 27.0, Rust 1.98.1, Python 3.13.15, release build via
 `uv sync --locked`. `litter-physics verify examples/verification_slump.yaml`,
@@ -148,6 +148,11 @@ spread or dissipation, and the spatial spread change grows under refinement. No
 acceptance follows from this study. `tests/test_verification.py::test_native_small_study`
 runs a shorter real study (0.05 s, same grids and steps) on every gate run and asserts
 completion, provenance and a `passed`-or-`unresolved` outcome only.
+
+The current wall-contact milestone was rerun through both CLI studies. Both
+remain unresolved; spatial slump height now also misses the 5% criterion.
+Current values and gates are in `validation.md`; the historical table above
+and the source-pinned formal manuscript are not silently replaced.
 
 References:
 - ASME V&V 20 refinement terminology: [here](https://doi.org/10.1115/1.2960953)

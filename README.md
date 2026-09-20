@@ -37,7 +37,7 @@ uv run litter-physics benchmark examples/maintenance_smoke.yaml --repetitions 3
 uv run litter-physics verify examples/verification_slump.yaml --out outputs/refinement
 ```
 
-The refinement example currently exits **1 (`unresolved`)**, not 0: spatial spread
+The refinement example currently exits **1 (`unresolved`)**, not 0: spatial slump height, spread
 and plastic dissipation have not met the 5% final-two-change criterion. Its complete
 case artifacts and report remain available. See [verification studies](docs/verification.md).
 
@@ -102,5 +102,6 @@ runs in `outputs/`. Document, test, commit and push each milestone. Claude work 
 integrated only after checking the actual code and running the shared gate.
 
 Details: [CLI](docs/cli.md), [mechanics](docs/dem.md), [household](docs/household.md),
-[research](docs/research.md), [calibration](docs/calibration.md),
+[research](docs/research.md), [wall-contact diagnosis](docs/hydrostatic-balance.md),
+[calibration](docs/calibration.md),
 [response tables](docs/response-tables.md), [wire contract](docs/wire-contract.md).

@@ -14,7 +14,8 @@ stationary, so their external work is identically zero. For material at rest on 
 wall, every step deposits the reacted gravity and stress momentum `W dt` on the wall
 nodes and the projection removes it again, losing `W^2 dt^2 / (2 m_wall)` per step.
 That loss is first order in `dt`, lives on the scratch grid and never reaches
-particle state:
+particle state. The following measurements predate the wall lattice completion
+and belong to the `9a66a55` energy-ledger baseline:
 
 ```
 paste column at rest, 0.02 s, cap-limited steps (limited_steps = 0)
@@ -38,8 +39,16 @@ the tangential velocity before and after the Coulomb reduction:
   the midpoint tangential velocity. On the sliding-block probe it reproduces the lost
   kinetic energy to under 1% (`7.73e-6` vs `KE0 = 7.68e-6` J at rest)
 - Normal projection energy MINUS friction dissipation equals the old midpoint
-  value (up to roundoff), i.e. the grid KE jump;
-  `wall_impulse` is unchanged and momentum accounting stays exact
+  value (up to roundoff), i.e. the projection/friction grid KE jump. The
+  energy-ledger split itself did not change `wall_impulse`
+
+The subsequent wall lattice completion (`hydrostatic-balance.md`) adds normal
+reaction impulses to nearby free nodes before this grid update. Those impulses
+are included in `wall_impulse`; their Coulomb reductions contribute to
+`wall_friction_dissipation` by the same nonnegative KE-loss formula. The KE
+change from the added normal impulses is **not** included in the ledger. The
+projection/friction identity above therefore does not cover the whole wall
+treatment, and unchanged energy-channel names do not imply unchanged trajectories.
 
 Pellet and coupling:
 
@@ -66,7 +75,8 @@ This is an algebraic mixed grid/particle diagnostic. It is NOT an unexplained-en
 closure: the resting column reports a positive residual equal to the projection loss
 because that energy was never in the particles. Also unledgered: APIC particle/grid
 transfer losses, constitutive and pellet time-discretisation error, contact spring
-energy, and the energy of outflow particles.
+energy, the normal lattice-completion impulse contribution, and the energy of
+outflow particles.
 
 ## Observables
 

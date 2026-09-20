@@ -13,9 +13,12 @@ Implemented and exercised:
   scoring, visit-stage generation, sweeps and benchmarks.
 - Bounded, separately varied spatial/time refinement studies using the real research
   kernel. The committed slump example completes but remains `unresolved`: spatial
-  spread and plastic dissipation have not met the 5% final-two-change criterion.
+  slump height, spread and plastic dissipation have not met the 5% final-two-change criterion.
   Missing diagnostics, adaptive limiting, incomplete cases and deadline overruns
   cannot pass. This facility does not establish measured validation.
+- Face-normal wall lattice completion with unilateral activation and a Coulomb
+  budget for both image and projection reactions. Native all-particle pressure
+  regressions and release/slip/stick checks pass (`hydrostatic-balance.md`).
 - Standalone response-table validation/interpolation with bounded exploration and
   fail-closed evidence policy. No physical response tables are shipped.
 
@@ -36,8 +39,11 @@ Runtime results for the tiny synthetic demos are recorded in `validation.md`. Th
 not representative full-box benchmarks. Native feasibility caps remain deliberately
 explicit. The first independent MPM review found active-grid bookkeeping and
 checkpoint-domain gaps and misleading energy-ledger semantics, now regression-tested
-(`energy-ledgers.md`); energy acceptance remains open. It also reported hydrostatic
-boundary errors and liquid pressure noise that remain acceptance blockers. A bounded
+(`energy-ledgers.md`); energy acceptance remains open. The hydrostatic wall correction reduces the original all-particle maximum
+pressure error from 29.7% to 1.15% at 10 ms, and stays at 1.27% at 100 ms.
+This is a bounded numerical improvement, not general liquid-pressure acceptance:
+free-surface error, contact range and both hydrostatic/slump refinement studies
+remain unresolved; added wall-reaction grid work is not ledgered. A bounded
 review and conservation tests do not establish research-grade accuracy.
 
 The formal manuscript (`formal/simulation.pdf`, scientific baseline `9a66a55`)

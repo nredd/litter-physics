@@ -29,6 +29,15 @@ fn completes_a_real_fixture_without_claiming_validation() {
     assert_eq!(output["fidelity"], "research_unvalidated");
     assert_eq!(output["frames"].as_array().expect("frames").len(), 3);
     assert!(
+        output["diagnostics"]
+            .as_array()
+            .expect("diagnostics")
+            .iter()
+            .any(|message| message
+                .as_str()
+                .is_some_and(|text| text.contains("normal grid work is unledgered")))
+    );
+    assert!(
         output["observables"]["mass_residual_kg"]
             .as_f64()
             .expect("residual")

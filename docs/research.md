@@ -13,6 +13,10 @@ Implemented:
   flow index. Study density error and artificial-wave-speed sensitivity before use.
 - Quadratic B-spline transfers, APIC affine state, gravity/wall impulses and adaptive
   CFL/contact/viscous limits. Failed steps reduce dt; failure below the minimum aborts.
+- Face-normal lattice completion at active domain-wall contacts, with no tensile
+  image reactions and Coulomb budgets for both images and normal projections.
+  This is a nodal contact surrogate, not an exact continuum boundary integral.
+  Its derivation, regressions and limitations are in `hydrostatic-balance.md`.
 - A two-way single-oriented-pellet coupling fixture with equal/opposite linear and
   angular impulses. The grid impulse test is NOT a full leakage/convergence validation.
 - `slump`, `hydrostatic`, `dam_break`, and `coupled_patch` fixtures. Coupled patches require
@@ -83,9 +87,11 @@ escape beyond the padded grid; it does NOT establish watertight subcell boundari
 
 The first independent review also reported nonconvergent maximum hydrostatic errors
 at the bottom boundary and per-particle liquid pressure noise insensitive to timestep
-refinement. The initialization-only hydrostatic test is not a time-evolved accuracy
-check. No pressure smoothing, interior-only metric substitution, or material-law change
-has been made to hide these issues; liquid-pressure and full energy acceptance remain
+refinement. Time-evolved all-particle tests now exercise the wall correction, including
+matched grid/time controls and a 0.1-second hold. The original maximum error
+drops from 29.7% to 1.15% at 10 ms, but the separate refinement study still
+reports `unresolved`. No pressure smoothing, interior-only metric substitution,
+or material-law change has been used; liquid-pressure and full energy acceptance remain
 open. The former `wall_work_j` ledger was the grid projection kinetic-energy loss, not
 physical work; it is now split into `wall_normal_projection_energy_j` and
 `wall_friction_dissipation_j` with coupling energy terms and an algebraic
