@@ -90,9 +90,11 @@ STANDING_CLAIM = (
     "Numerical refinement verification of the compiled research kernel only. Passing "
     "means the named observables changed by less than the threshold between the two "
     "finest resolutions on one axis; it is not proof of convergence, not measured "
-    "surrogate or household validation, and not grounds to promote a response table."
+    "surrogate or household validation, and not grounds to promote a response table. "
+    "No bound on absolute analytic-reference error is established."
 )
 OMITTED_GATES = (
+    "absolute analytic-reference accuracy",
     "domain-size refinement",
     "combined space-time refinement",
     "asymptotic-range (Richardson) error estimation",

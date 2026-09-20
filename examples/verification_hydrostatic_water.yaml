@@ -1,0 +1,23 @@
+# SYNTHETIC DIAGNOSTIC STUDY, not an absolute hydrostatic-accuracy gate.
+# This reports resolution sensitivity of the pressure ERRORS themselves.
+# A small final-two change in a large error is NOT accurate hydrostatics.
+# Conversely, near-zero errors are reported as uninformative by the relative-
+# change criterion, not promoted into a convergence claim. See docs/verification.md.
+base_request: research_hydrostatic_water.yaml
+label: hydrostatic-water-refinement
+spatial:
+  grid_spacings_m: [0.004, 0.002, 0.001]
+  dt_s: 0.000025
+temporal:
+  grid_spacing_m: 0.002
+  dt_values_s: [0.00005, 0.000025, 0.0000125]
+observables:
+  - name: hydrostatic_max_relative_error
+    near_zero_scale: 0.001
+    note: "0.1% of rho0*g*H; sensitivity floor, not an accuracy tolerance"
+  - name: hydrostatic_rms_relative_error
+    near_zero_scale: 0.001
+    note: "same 0.1% normalization floor; include all particles without smoothing"
+max_relative_change: 0.05
+per_case_wall_budget_s: 900.0
+total_wall_budget_s: 3600.0

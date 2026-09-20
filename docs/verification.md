@@ -92,10 +92,37 @@ observables, `omitted_gates` and `claim`.
 
 ## Omitted gates
 
-This facility does not cover: domain-size refinement, combined space-time refinement,
-Richardson or asymptotic-range error estimation, species residual acceptance, measured
+This facility does not cover: absolute error against an analytic reference, domain-size
+refinement, combined space-time refinement, Richardson or asymptotic-range error
+estimation, species residual acceptance, measured
 clean-surrogate validation, or response-table promotion. Those remain open in
 `docs/status.md`.
+
+## Hydrostatic pressure diagnostic
+
+```sh
+uv run litter-physics run examples/research_hydrostatic_water.yaml --out outputs/hydrostatic-water
+uv run litter-physics verify examples/verification_hydrostatic_water.yaml \
+  --out outputs/hydrostatic-water-refinement
+```
+
+The request initializes the exact continuum pressure profile for the artificial liquid
+EOS, then evolves it for 10 ms. Evaluate `hydrostatic_max_relative_error` and
+`hydrostatic_rms_relative_error` AFTER evolution, not only at initialization. Both
+compare against the analytic profile using every particle, normalized by `rho0*g*H`;
+bottom rows and corners are not discarded and pressures are not smoothed.
+
+The study varies `h = 4, 2, 1 mm` at `dt = 25 us`, then `dt = 50, 25, 12.5 us` at
+`h = 2 mm`. All requested caps are below the INITIAL acoustic restriction, but actual
+limiter/rejection history remains authoritative. The parameters are synthetic and the
+bulk modulus is artificial, not a measurement of real water.
+
+This study measures changes in the pressure-error observables, NOT an absolute
+hydrostatic-accuracy bound. A nearly constant 30% pressure error can pass a 5%
+final-two-change criterion. Conversely, error below the configured 0.1% normalization
+floor is `uninformative` under the relative-change rule, not proof of convergence.
+Use the raw analytic errors and a separately stated accuracy tolerance when assessing
+the hydrostatic solution; `verify` exit 0 alone cannot establish it.
 
 ## Executed evidence
 

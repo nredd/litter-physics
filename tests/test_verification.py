@@ -227,6 +227,39 @@ def test_particle_cap_fails_closed() -> None:
         check_grid_fit(request, "case")
 
 
+def test_hydrostatic_example_plans_below_initial_acoustic_limit() -> None:
+    """Keep the diagnostic's axes grid-fitting and below the initial acoustic cap."""
+    spec = load_study(EXAMPLES / "verification_hydrostatic_water.yaml")
+    base = yaml.safe_load(
+        (EXAMPLES / "research_hydrostatic_water.yaml").read_text(encoding="utf-8")
+    )
+    cases = plan_cases(spec, base)
+    assert len(cases) == 6
+    counts = []
+    for case in cases:
+        cfg = case.request.research
+        assert cfg is not None
+        assert cfg.fixture.value == "hydrostatic"
+        assert cfg.material.value == "water"
+        bulk = cfg.young_modulus_pa / (3 * (1 - 2 * cfg.poisson_ratio))
+        wave_speed = math.sqrt(bulk / cfg.density_kg_m3)
+        assert case.request.dt_s < 0.3 * cfg.grid_spacing_m / wave_speed
+        counts.append(
+            math.prod(round(size / (cfg.grid_spacing_m / 2)) for size in cfg.initial_size_m)
+        )
+    assert counts == [500, 4000, 32000, 4000, 4000, 4000]
+    assert {case.request.dt_s for case in cases[:3]} == {0.000025}
+    assert [case.request.dt_s for case in cases[3:]] == [0.00005, 0.000025, 0.0000125]
+
+
+def test_small_changes_in_large_pressure_errors_are_not_absolute_accuracy() -> None:
+    """The relative-change verdict must not be presented as an analytic-error gate."""
+    observable = ObservableSpec(name="hydrostatic_max_relative_error", near_zero_scale=0.001)
+    result = evaluate_observable(observable, [0.004, 0.002, 0.001], [0.31, 0.30, 0.299], 0.05)
+    assert result.outcome is ObservableOutcome.PASSED
+    assert result.values[-1] == 0.299  # Still almost 30% error against hydrostatic equilibrium.
+
+
 def test_plan_rejects_household_base() -> None:
     """Only research requests can be refined."""
     base = yaml.safe_load((EXAMPLES / "household_basic.yaml").read_text(encoding="utf-8"))
@@ -541,6 +574,8 @@ def test_native_small_study(tmp_path: Path) -> None:
     assert report.outcome in {StudyOutcome.PASSED, StudyOutcome.UNRESOLVED}
     assert report.criterion_met == (report.outcome is StudyOutcome.PASSED)
     assert report.fidelity == "research_unvalidated"
+    assert "absolute analytic-reference accuracy" in report.omitted_gates
+    assert "No bound on absolute analytic-reference error is established." in report.claim
     assert report.provenance.native_sha256 is not None
     assert report.total_wall_time_s < 600.0
     assert not report.total_budget_exceeded

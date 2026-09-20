@@ -35,7 +35,7 @@ def test_examples_validate_against_schema() -> None:
     """Examples pass the request schema; the invalid one fails."""
     schema = json.loads((SCHEMAS / "request.schema.json").read_text(encoding="utf-8"))
     validator = jsonschema.Draft202012Validator(schema)
-    for name in ("household_basic.yaml", "research_slump.yaml"):
+    for name in ("household_basic.yaml", "research_slump.yaml", "research_hydrostatic_water.yaml"):
         document = yaml.safe_load((EXAMPLES / name).read_text(encoding="utf-8"))
         validator.validate(document)
     observations = json.loads((SCHEMAS / "observations.schema.json").read_text(encoding="utf-8"))
@@ -47,9 +47,10 @@ def test_examples_validate_against_schema() -> None:
         yaml.safe_load((EXAMPLES / "sweep_friction.yaml").read_text(encoding="utf-8"))
     )
     study = json.loads((SCHEMAS / "verification-study.schema.json").read_text(encoding="utf-8"))
-    jsonschema.Draft202012Validator(study).validate(
-        yaml.safe_load((EXAMPLES / "verification_slump.yaml").read_text(encoding="utf-8"))
-    )
+    for name in ("verification_slump.yaml", "verification_hydrostatic_water.yaml"):
+        jsonschema.Draft202012Validator(study).validate(
+            yaml.safe_load((EXAMPLES / name).read_text(encoding="utf-8"))
+        )
     profiles = json.loads((SCHEMAS / "cat-profile.schema.json").read_text(encoding="utf-8"))
     for profile in yaml.safe_load(
         (EXAMPLES / "cat_profiles_synthetic.yaml").read_text(encoding="utf-8")
