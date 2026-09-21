@@ -44,6 +44,14 @@ case artifacts and report remain available. See [verification studies](docs/veri
 Synthetic calibration never establishes measured parameters or supported household
 personalization. Collect real observations using [docs/measurements.md](docs/measurements.md).
 
+## Replay
+
+New recordings open with a large Z-up simulation view, material/fidelity guide,
+three inventory charts, events and segment-final summaries. Household and slump
+playback have been inspected in Chromium/WebGPU. These are particle/proxy views,
+not photorealistic cats or reconstructed fluid surfaces.
+[Controls, screenshots and limitations](docs/replay.md).
+
 ## Implemented
 
 - Oriented multisphere pellets, frictional contacts, explicit slot geometry and compliant

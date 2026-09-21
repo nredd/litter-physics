@@ -9,6 +9,10 @@ Implemented and exercised:
 - Single-phase paste/liquid MPM primitives and a two-way single-pellet fixture.
 - CLI, JSON checkpoints, immutable artifact segments, Parquet, loopback browser serving,
   recording verification, build-compatible resume and explicit budget/deadline outcomes.
+- Scene-first Rerun layouts with explicit Z-up geometry, research-domain bounds,
+  inventory charts, model/material guide and timestamped segment summaries. Real
+  household/slump browser playback and scrubbing inspected (`replay.md`); no cat
+  mesh, fluid-surface reconstruction or pressure/velocity coloring yet.
 - Synthetic observation import, identifiable curve fits, duration-only personalization
   scoring, visit-stage generation, sweeps and benchmarks.
 - Bounded, separately varied spatial/time refinement studies using the real research

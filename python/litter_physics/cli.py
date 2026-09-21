@@ -344,28 +344,38 @@ def cmd_view(args: argparse.Namespace) -> int:
         raise ArtifactError(f"Run '{run_dir.root}' has no committed segments")
     summary = ledger_summary(run_dir.read_metrics())
     print(json.dumps({"status": str(manifest.status), "ledger": summary}, indent=2))
-    handle = start_loopback_viewer(run_dir, grpc_port=args.grpc_port, web_port=args.web_port)
-    print(f"viewer: {handle.web_url} (loopback only)")
-    if args.open_browser:
-        import webbrowser  # local import: deferred, only used when opening a browser
-
-        webbrowser.open(handle.web_url)
-    deadline = None if args.duration is None else time.monotonic() + args.duration
     stop = False
 
     def on_signal(_signum: int, _frame: object) -> None:
+        """Request graceful shutdown without interrupting child-process cleanup."""
         nonlocal stop
         stop = True
 
-    previous = signal.signal(signal.SIGINT, on_signal)
+    # Install handlers before starting the child: termination during readiness
+    # checks must not orphan its separate process group either.
+    previous = {
+        number: signal.signal(number, on_signal) for number in (signal.SIGINT, signal.SIGTERM)
+    }
+    handle = None
     try:
+        handle = start_loopback_viewer(run_dir, grpc_port=args.grpc_port, web_port=args.web_port)
+        print(f"viewer: {handle.web_url} (loopback only)")
+        if args.open_browser and not stop:
+            import webbrowser  # local import: deferred, only used when opening a browser
+
+            webbrowser.open(handle.web_url)
+        deadline = None if args.duration is None else time.monotonic() + args.duration
         while not stop and (deadline is None or time.monotonic() < deadline):
             if handle.process.poll() is not None:
                 raise ViewerError(f"viewer exited with code {handle.process.returncode}")
             time.sleep(0.25)
     finally:
-        signal.signal(signal.SIGINT, previous)
-        handle.stop()
+        try:
+            if handle is not None:
+                handle.stop()
+        finally:
+            for number, handler in previous.items():
+                signal.signal(number, handler)
     return EXIT_OK
 
 

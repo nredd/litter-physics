@@ -58,8 +58,8 @@ or measured-material accuracy follows from the above timings/residuals.
 
 Real integration tests require both modes to complete, exercise real native checkpoint
 and JSON round trips, reject request drift, and verify exported Rerun files. Viewer
-checks fetch the loopback HTTP page and assert both ports close after shutdown. The
-browser's visual rendering has not been manually inspected. Synthetic calibration was
+checks fetch the loopback HTTP page and assert both ports close after shutdown. At that initial milestone,
+browser rendering had not been visually inspected; see the later replay milestone below. Synthetic calibration was
 run through the CLI and remained explicitly non-measured.
 
 Integration fixes:
@@ -188,3 +188,30 @@ Reproduce with the committed `verification_hydrostatic_water.yaml` and
 Free-surface pressure accuracy, contact range, pellet-surface coupling, energy
 closure and measured validation remain open. The `9a66a55` manuscript equations,
 frozen report and PDF are unchanged; its generated-data check still passes.
+
+
+## Browser replay inspection
+
+The actual household (48 pellets, 1 s) and research slump (512 points, 0.5 s) runs
+were rendered in Chromium 153 / WebGPU, not merely fetched over HTTP. Initial
+states, moving samples, inventory charts, event/warning tabs and final summaries
+were inspected; numeric-time scrubbing reached both final states. Screenshots and
+exact reproduction instructions are in `replay.md`. No JavaScript page errors were
+captured. Safari/Firefox and resumed multi-segment browser rendering remain uninspected.
+
+The prior auto-layout reduced the scene to a small tile surrounded by final-value
+plots. New recordings use a geometry-bounded Z-up scene, explicit ledger selections,
+compartment series names/colors and a visible fidelity/proxy guide. Final observables
+remain logged numerically, but the default Summary tab presents them as segment-final
+samples, timestamped at the segment end. Existing artifacts are not rewritten.
+
+The visual probe also exposed a real lifecycle bug: SIGTERM orphaned the separate
+Rerun process group. The CLI now installs both termination handlers before startup,
+stops the child in cleanup and restores previous handlers. Separate-process SIGTERM
+checks during startup and while serving both exited 0 and closed HTTP/gRPC ports.
+No browser tooling was added to runtime dependencies and no numerical law changed.
+
+Replay milestone gate: 105 Rust tests and 158 Python tests passed, 95% Python
+coverage; formatting, Clippy, type checks, Rust docs and schema checks clean.
+Installed-package tests also passed all 158 cases on Python 3.12 and 3.14.
+The historical formal manuscript and frozen evidence remain unchanged.

@@ -1,9 +1,9 @@
 # Python CLI and artifacts
 
 `litter-physics` orchestrates the native solver. Python validates, freezes, budgets,
-stores, and replays; it never steps particles. Until integration registers
-`_core.run_json`, `run`, `sweep`, and `benchmark` exit 1 with `UNAVAILABLE`; every
-other command works today.
+stores, and replays; it never steps particles. `uv sync --locked` builds the
+implemented `_core.run_json` extension. Numerical commands fail explicitly with
+`UNAVAILABLE` when that native extension is absent, rather than substituting a mock.
 
 Exit codes: `0` success, `1` failure, `2` usage, `3` incomplete (budget or deadline
 stop, resumable). An incomplete run is never reported as success.
@@ -49,7 +49,10 @@ the `rerun` CLI bundled with `rerun-sdk` with `--bind 127.0.0.1`; the Python
 `serve_grpc`/`serve_web_viewer` API binds all interfaces (verified with `lsof` on the
 development host) and is deliberately not used. After start, the command probes every
 non-loopback address of the host and refuses to continue if any answers. Runs until
-Ctrl-C or `--duration`.
+Ctrl-C, SIGTERM or `--duration`, including graceful termination during startup.
+New recordings embed the scene-first layout documented in `replay.md`: Z-up geometry,
+inventory charts, model guide, event/warning log and timestamped final summaries.
+Older recordings retain their recorded layout and are never overwritten.
 
 `calibrate --observations FILE --template REQUEST --out BUNDLE [--run DIR] [--report PATH]`
 Fit identifiable parameters and write a bundle plus text report. See
@@ -112,8 +115,8 @@ checkpoint is kept so `--resume` can finish it. Native `budget_exhausted` maps t
 - Sweeps run sequentially; there is no job-level parallelism
 - Recordings are derived views, never restart inputs; `rerun rrd verify` checks them
 - Loopback verification probes the host's non-loopback IPv4 addresses only
-- Coordinates in recordings are box origin plus box-local positions; there is no
-  rotation support in `BoxCfg`
+- Native frame coordinates are already world-space, including box origins; replay
+  does not add origins again. The world is explicitly Z-up. `BoxCfg` has no rotation support
 
 Integration guarantees:
 - `make gate` rebuilds the current native sources and requires real-kernel integration

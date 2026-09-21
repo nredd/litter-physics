@@ -29,6 +29,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import rerun as rr
+import rerun.blueprint as rrb
 import rerun_cli
 
 from litter_physics.artifacts import RECORDING_FILE, RunDirectory
@@ -57,6 +58,15 @@ MATERIAL_COLORS: dict[str, tuple[int, int, int]] = {
     "paw": (220, 160, 170),
 }
 DEFAULT_COLOR = (160, 160, 160)
+COMPARTMENT_COLORS: dict[Compartment, tuple[int, int, int]] = {
+    Compartment.BED: (180, 130, 50),
+    Compartment.DRAWER: (70, 130, 220),
+    Compartment.FLOOR: (230, 110, 40),
+    Compartment.REMOVED: (150, 80, 180),
+    Compartment.EVAPORATED: (80, 190, 210),
+    Compartment.DOMAIN: (40, 150, 110),
+    Compartment.OUTFLOW: (220, 50, 50),
+}
 
 
 class ViewerError(RuntimeError):
@@ -77,12 +87,126 @@ def material_colors(materials: list[str]) -> np.ndarray:
     ).reshape(-1, 3)
 
 
-def _log_boxes(request: SimulationRequest) -> None:
-    """Log static box and drawer cutaway geometry.
+def _replay_blueprint(request: SimulationRequest) -> rrb.Blueprint:
+    """Build a scene-first layout without auto-generated final-value plots.
 
     Parameters:
-        request (SimulationRequest): Frozen request with box geometry.
+        request (SimulationRequest): Frozen bounds for the initial camera.
+
+    Returns:
+        rrb.Blueprint: Scene, documentation/log tabs, and species inventory charts.
     """
+    if request.research is not None:
+        lower = np.zeros(3)
+        upper = np.array(request.research.domain_m)
+    else:
+        lower = np.min(
+            [np.array(box.origin_m) - [0.0, 0.0, box.drawer_depth_m] for box in request.boxes],
+            axis=0,
+        )
+        upper = np.max([np.array(box.origin_m) + box.size_m for box in request.boxes], axis=0)
+    center = (lower + upper) / 2.0
+    radius = float(np.linalg.norm(upper - lower)) / 2.0
+    direction = np.array([1.0, -1.0, 0.8])
+    direction /= np.linalg.norm(direction)
+    return rrb.Blueprint(
+        rrb.Vertical(
+            rrb.Horizontal(
+                rrb.Spatial3DView(
+                    name="Simulation (metres)",
+                    origin="/world",
+                    contents=["$origin/particles", "$origin/boxes/**", "$origin/domain"],
+                    background=(24, 28, 36),
+                    eye_controls=rrb.archetypes.EyeControls3D(
+                        position=center + direction * (2.1 * radius),
+                        look_target=center,
+                        eye_up=[0.0, 0.0, 1.0],
+                    ),
+                ),
+                rrb.Tabs(
+                    rrb.TextDocumentView(name="Guide", origin="/replay/guide"),
+                    rrb.TextLogView(name="Events", contents=["/events/log", "/diagnostics"]),
+                    rrb.TextDocumentView(name="Summary", origin="/replay/summary"),
+                ),
+                column_shares=[3, 1],
+            ),
+            rrb.Horizontal(
+                *(
+                    rrb.TimeSeriesView(
+                        name=f"{species.title()} inventory (kg)",
+                        contents=[
+                            f"/ledger/{compartment}/{species}_kg" for compartment in Compartment
+                        ],
+                    )
+                    for species in ("wood", "waste", "water")
+                )
+            ),
+            row_shares=[3, 1],
+        ),
+        rrb.BlueprintPanel(state="collapsed"),
+        rrb.SelectionPanel(state="collapsed"),
+        rrb.TimePanel(
+            state="collapsed", timeline="sim_time", play_state="Paused", loop_mode="All"
+        ),
+        auto_layout=False,
+        auto_views=False,
+    )
+
+
+def _log_replay_context(request: SimulationRequest, output: SimulationOutput) -> None:
+    """Log immutable model/legend context and named inventory-series styles.
+
+    Parameters:
+        request (SimulationRequest): Frozen geometry and model selection.
+        output (SimulationOutput): Segment fidelity and recorded compartments.
+    """
+    fixture = f" / {request.research.fixture}" if request.research else ""
+    legend = "\n".join(f"| {name} | {color} |" for name, color in MATERIAL_COLORS.items())
+    text = (
+        f"# {request.mode}{fixture}\n\n"
+        f"**{output.fidelity}**\n\n"
+        "Coordinates are metres, Z up. Timeline values are simulated seconds.\n\n"
+        "Point spheres are rendering proxies, not pellet cylinders "
+        "or reconstructed fluid surfaces. "
+        "Colors identify material labels, not pressure, velocity, or measured moisture. "
+        "Wireframes show bounding geometry, not resolved slots or solid surfaces.\n\n"
+        "No measured household accuracy or accepted numerical convergence is claimed.\n\n"
+        "Space: play/pause. Drag: orbit. Scroll: zoom. Expand the bottom Time panel to scrub. "
+        "Use the Events tab for actions and solver limitations. Historical red event "
+        "markers are omitted from the default scene to avoid obscuring particles.\n\n"
+        "## Material legend (RGB)\n\n| Material | RGB |\n| --- | --- |\n"
+        f"{legend}\n\nUnknown labels use grey. Inventory colors identify compartments. "
+        "Segment summary contains final samples, not time-resolved field measurements."
+    )
+    rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+    rr.log("replay/guide", rr.TextDocument(text, media_type="text/markdown"), static=True)
+    for compartment in sorted({row.compartment for row in output.metrics}):
+        for species in ("wood", "waste", "water"):
+            rr.log(
+                f"ledger/{compartment}/{species}_kg",
+                rr.SeriesLines(names=[str(compartment)], colors=[COMPARTMENT_COLORS[compartment]]),
+                static=True,
+            )
+
+
+def _log_geometry(request: SimulationRequest) -> None:
+    """Log household box/drawer bounds or the research domain, without solid occlusion.
+
+    Parameters:
+        request (SimulationRequest): Frozen household or research geometry.
+    """
+    if request.research is not None:
+        rr.log(
+            "world/domain",
+            rr.Boxes3D(
+                mins=[[0.0, 0.0, 0.0]],
+                sizes=[request.research.domain_m],
+                colors=[(150, 150, 170)],
+                fill_mode="MajorWireframe",
+            ),
+            static=True,
+        )
+        return
     for box in request.boxes:
         size = np.array(box.size_m, dtype=np.float64)
         origin = np.array(box.origin_m, dtype=np.float64)
@@ -172,6 +296,20 @@ def _log_output(output: SimulationOutput) -> None:
         rr.set_time("sim_time", duration=output.time_s)
         rr.log(f"observables/{key}", rr.Scalars([value]))
     rr.set_time("sim_time", duration=output.time_s)
+    rows = "\n".join(
+        f"| `{key}` | {value:.8g} |" for key, value in sorted(output.observables.items())
+    )
+    rr.log(
+        "replay/summary",
+        rr.TextDocument(
+            f"# Segment end at {output.time_s:.6g} s\n\n"
+            f"Status: **{output.status}**. Fidelity: **{output.fidelity}**.\n\n"
+            "These are segment-final samples, not continuous histories. "
+            "This document appears only at the segment end on the timeline.\n\n"
+            f"| Observable | Value (units in name) |\n| --- | --- |\n{rows}",
+            media_type="text/markdown",
+        ),
+    )
     for line in output.diagnostics:
         rr.log("diagnostics", rr.TextLog(line, level="WARN"))
 
@@ -204,7 +342,9 @@ def write_segment_recording(
     stream = rr.RecordingStream(APPLICATION_ID, recording_id=recording_id)
     with stream:
         stream.save(path)
-        _log_boxes(request)
+        stream.send_blueprint(_replay_blueprint(request))
+        _log_replay_context(request, output)
+        _log_geometry(request)
         _log_events(request, start_time_s, output.time_s)
         _log_output(output)
         stream.flush()
