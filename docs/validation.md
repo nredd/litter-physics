@@ -135,8 +135,9 @@ The wall-adjacent MLS quadrature lacked normal lattice support. Face-normal
 image reactions now use the wall-plane active set, reject pulling reactions,
 and contribute their own Coulomb budget. This is a nodal boundary approximation,
 not an exact contact solution; see `hydrostatic-balance.md` for the derivation,
-rejected variants, retained counterexamples and limits. Native output diagnostics
-explicitly flag its unledgered normal grid work and the missing energy closure.
+rejected variants, retained counterexamples and limits. At that milestone, native
+output diagnostics flagged omitted normal grid work. The later signed grid-energy
+accounting below replaces that warning; physical energy closure remains missing.
 
 Integrated gate: **105 Rust tests and 153 Python tests**, no skips, 95% Python
 coverage, formatting/lint/types, Rust docs and schema checks clean. Installed-package
@@ -215,3 +216,48 @@ Replay milestone gate: 105 Rust tests and 158 Python tests passed, 95% Python
 coverage; formatting, Clippy, type checks, Rust docs and schema checks clean.
 Installed-package tests also passed all 158 cases on Python 3.12 and 3.14.
 The historical formal manuscript and frozen evidence remain unchanged.
+
+## Normal wall-transfer energy accounting
+
+`wall_normal_traction_energy_j` records the actual face-normal deposit's signed grid
+KE change before gravity, not physical external wall work. Per-deposit accumulation
+is checked against independent full-grid KE differences, including positive,
+negative, separating, shared-node/corner and coupled cases. Massless deposits do
+nothing. Rejected trials preserve histories; nonfinite increments and cumulative
+overflow fail before commit. See `energy-ledgers.md` for the exact definition.
+
+Actual CLI comparisons against `4a243b7`, using the shipped hydrostatic-water,
+slump and new coupled-patch examples:
+
+| fixture | new signed channel (J) | old residual (J) | new residual (J) |
+|---|---:|---:|---:|
+| Hydrostatic, 10 ms | 1.0219846729e-8 | 1.4356728261e-6 | 1.4254529794e-6 |
+| Slump, 500 ms | -9.7731734973e-6 | 6.3996422367e-5 | 7.3769595864e-5 |
+| Coupled pellet, 50 ms | -3.4963973432e-6 | -1.0620311823e-5 | -7.1239144793e-6 |
+
+Canonical JSON comparisons found identical recorded particle rows, species metrics,
+physical checkpoint state, previous ledger histories and every old observable
+except `energy_residual_j`. The only excluded old checkpoint field was the
+wall-clock-dependent remaining `request.max_wall_time_s`. The residual changes by
+minus the new channel, up to roundoff. The slump residual **increases** in magnitude:
+this is improved accounting, not reduced physical error or energy acceptance.
+Local artifacts: `outputs/wall-energy-{before,after}-{hydro,slump,coupled}` and
+`outputs/wall-energy-review/comparison.json`.
+
+A real 50 ms native wall budget stopped the coupled run after 43 accepted steps
+(2.15 ms simulated), with `-4.5405977455e-9 J` of nonzero traction history. After a
+JSON checkpoint round trip, the resumed run matched every uninterrupted final
+observable exactly. Removing the new history produced `missing field
+wall_normal_traction_energy`; replacing it with null produced `invalid type: null,
+expected f64`. Older checkpoints are rejected, not given fabricated zero history.
+These runtime-dependent stop timings are observations, not timing assertions in CI.
+
+The 8000-point coupled example completed 1000 steps and exports research-domain
+replay geometry. It remains a synthetic, single-pellet fixture: no porous transport,
+absorption, wet fragmentation, adhesion or accepted coupled refinement. No force
+law or acceptance threshold changed. The historical manuscript/archive are untouched.
+
+Milestone gate: **111 Rust tests and 159 Python tests**, no skips, 95% Python
+coverage; formatting, Clippy, type checks, Rust docs and schema checks clean.
+Installed-package tests passed all 159 cases on Python 3.12 and 3.14; the gate used
+3.13. `docs/formal/build.py --check` also passed without rebaselining frozen evidence.

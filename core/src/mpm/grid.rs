@@ -264,7 +264,16 @@ impl Grid {
 
     /// Add a wall-reaction impulse of magnitude `inward_impulse >= 0` along
     /// `axis` (signed by `inward`) to a node that already carries mass, and
-    /// record it as that node's Coulomb budget. Returns `false`, depositing
+    /// record it as that node's Coulomb budget.
+    ///
+    /// Returns: the signed change of this node's kinetic energy
+    /// `|p|^2 / (2 m)` in J caused by the deposit, evaluated on the momentum
+    /// the node holds at this moment (before any later deposit and before the
+    /// grid update adds gravity), as `dp (p_a / m + dp / (2 m))` with
+    /// `dp = inward * inward_impulse`. This is the algebraic identity
+    /// `((p_a + dp)^2 - p_a^2) / (2 m)` without the cancellation of
+    /// subtracting two large energies, and successive deposits on one node
+    /// telescope to the node's full before/after jump. `None`, depositing
     /// nothing, for a massless node, since momentum without mass would be an
     /// infinite velocity.
     pub(super) fn deposit_reaction(
@@ -273,13 +282,16 @@ impl Grid {
         axis: usize,
         inward: f64,
         inward_impulse: f64,
-    ) -> bool {
-        if self.mass[index] <= 0.0 {
-            return false;
+    ) -> Option<f64> {
+        let mass = self.mass[index];
+        if mass <= 0.0 {
+            return None;
         }
-        self.momentum[index][axis] += inward_impulse * inward;
+        let impulse = inward_impulse * inward;
+        let jump = impulse * (self.momentum[index][axis] / mass + impulse / (2.0 * mass));
+        self.momentum[index][axis] += impulse;
         self.traction[index][axis] += inward_impulse;
-        true
+        Some(jump)
     }
 
     /// Total momentum over active nodes (fixed order).
@@ -350,16 +362,70 @@ mod tests {
         let layout =
             GridLayout::new([0.02, 0.02, 0.02], 0.002, 1_000_000).unwrap_or_else(|e| panic!("{e}"));
         let mut grid = super::Grid::new(layout);
-        assert!(!grid.deposit_reaction(3, 0, 1.0, 1.0));
+        assert!(grid.deposit_reaction(3, 0, 1.0, 1.0).is_none());
         assert!(grid.active.is_empty());
         assert_eq!(grid.momentum[3], Vector3::zeros());
         grid.deposit(3, 2.0, Vector3::new(0.5, 0.0, 0.0));
-        assert!(grid.deposit_reaction(3, 0, -1.0, 1.0));
+        assert!(grid.deposit_reaction(3, 0, -1.0, 1.0).is_some());
         assert_eq!(grid.momentum[3], Vector3::new(-0.5, 0.0, 0.0));
         assert_eq!(grid.traction[3], Vector3::new(1.0, 0.0, 0.0));
         assert_eq!(grid.active, vec![3]);
         grid.clear();
         assert_eq!(grid.traction[3], Vector3::zeros());
+    }
+
+    /// Grid kinetic energy `sum |p|^2 / (2 m)` over active nodes, the quantity
+    /// every reaction deposit reports its own jump of.
+    fn grid_kinetic_energy(grid: &super::Grid) -> f64 {
+        grid.active
+            .iter()
+            .map(|&index| 0.5 * grid.momentum[index].norm_squared() / grid.mass[index])
+            .sum()
+    }
+
+    #[test]
+    fn reaction_deposit_reports_signed_kinetic_jump_that_telescopes_per_node() {
+        let layout =
+            GridLayout::new([0.02, 0.02, 0.02], 0.002, 1_000_000).unwrap_or_else(|e| panic!("{e}"));
+        let mut grid = super::Grid::new(layout);
+        // Massless node: nothing is deposited and no jump is reported.
+        assert_eq!(grid.deposit_reaction(3, 0, 1.0, 1.0), None);
+        assert!(grid.active.is_empty());
+        let mass = 2.0;
+        grid.deposit(3, mass, Vector3::new(0.5, 0.0, -0.4));
+        grid.deposit(9, 0.5, Vector3::new(0.0, 0.1, 0.0));
+        let before = grid_kinetic_energy(&grid);
+        // Opposing the existing momentum removes kinetic energy...
+        let against = grid
+            .deposit_reaction(3, 0, -1.0, 0.3)
+            .expect("node carries mass");
+        assert!((against - 0.3 * (-0.5 / mass + 0.3 / (2.0 * mass))).abs() < 1e-17);
+        assert!(against < 0.0);
+        // ...while pushing along it adds kinetic energy, on another axis...
+        let along = grid
+            .deposit_reaction(3, 2, -1.0, 0.2)
+            .expect("node carries mass");
+        assert!((along - 0.2 * (0.4 / mass + 0.2 / (2.0 * mass))).abs() < 1e-17);
+        assert!(along > 0.0);
+        // ...and repeated deposits on the same node and axis telescope exactly.
+        let mut total = against + along;
+        for _ in 0..3 {
+            total += grid
+                .deposit_reaction(3, 0, -1.0, 0.3)
+                .expect("node carries mass");
+        }
+        total += grid
+            .deposit_reaction(9, 1, 1.0, 0.05)
+            .expect("node carries mass");
+        let jump = grid_kinetic_energy(&grid) - before;
+        assert!(
+            (total - jump).abs() <= 1e-15 * jump.abs().max(1e-12),
+            "per-deposit sum {total} vs grid jump {jump}"
+        );
+        assert_eq!(grid.traction[3], Vector3::new(1.2, 0.0, 0.2));
+        // Preserve the actual floating-point addition order for momentum;
+        // `-0.4 - 0.2` is one ULP away from the literal `-0.6`.
+        assert_eq!(grid.momentum[3], Vector3::new(-0.7, 0.0, -0.4 - 0.2));
     }
 
     #[test]

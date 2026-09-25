@@ -31,6 +31,8 @@ Research and calibration examples:
 
 ```sh
 uv run litter-physics run examples/research_slump.yaml --out outputs/slump --wall-budget 30
+uv run litter-physics run examples/research_coupled_patch.yaml --out outputs/coupled
+uv run litter-physics view outputs/coupled --open-browser
 uv run litter-physics calibrate --observations examples/observations_synthetic.json \
   --template examples/maintenance_smoke.yaml --out outputs/calibration.json
 uv run litter-physics benchmark examples/maintenance_smoke.yaml --repetitions 3
@@ -40,6 +42,10 @@ uv run litter-physics verify examples/verification_slump.yaml --out outputs/refi
 The refinement example currently exits **1 (`unresolved`)**, not 0: spatial slump height, spread
 and plastic dissipation have not met the 5% final-two-change criterion. Its complete
 case artifacts and report remain available. See [verification studies](docs/verification.md).
+
+The coupled example is one rigid pellet interacting with synthetic paste, not
+absorption, fragmentation or a validated litter bed. Signed wall-transfer energy
+is now recorded without changing trajectories; [energy closure remains open](docs/energy-ledgers.md).
 
 Synthetic calibration never establishes measured parameters or supported household
 personalization. Collect real observations using [docs/measurements.md](docs/measurements.md).

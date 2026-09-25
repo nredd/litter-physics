@@ -35,7 +35,12 @@ def test_examples_validate_against_schema() -> None:
     """Examples pass the request schema; the invalid one fails."""
     schema = json.loads((SCHEMAS / "request.schema.json").read_text(encoding="utf-8"))
     validator = jsonschema.Draft202012Validator(schema)
-    for name in ("household_basic.yaml", "research_slump.yaml", "research_hydrostatic_water.yaml"):
+    for name in (
+        "household_basic.yaml",
+        "research_slump.yaml",
+        "research_hydrostatic_water.yaml",
+        "research_coupled_patch.yaml",
+    ):
         document = yaml.safe_load((EXAMPLES / name).read_text(encoding="utf-8"))
         validator.validate(document)
     observations = json.loads((SCHEMAS / "observations.schema.json").read_text(encoding="utf-8"))

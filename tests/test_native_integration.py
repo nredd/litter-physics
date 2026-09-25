@@ -12,10 +12,11 @@ from pathlib import Path
 import pytest
 
 from litter_physics.artifacts import RunDirectory, RunStatus
-from litter_physics.models import SimulationRequest, request_to_wire
+from litter_physics.models import SimulationRequest, load_request, request_to_wire
 from litter_physics.native import NativeContractError, resolve_runner, run_segment
 from litter_physics.runner import resume_run, start_run
 from litter_physics.viewer import recording_entities
+from tests.conftest import EXAMPLES
 
 pytestmark = pytest.mark.usefixtures("native_or_skip")
 
@@ -110,3 +111,19 @@ def test_research_fixture_completes(research_request: SimulationRequest) -> None
     assert output.fidelity == "research_unvalidated"
     assert abs(output.observables["mass_residual_kg"]) < 1e-12
     assert len(output.frames) == 3
+
+
+def test_coupled_example_exports_wall_energy_and_research_geometry(tmp_path: Path) -> None:
+    """Exercise the shipped pellet/paste fixture and its diagnostic-only energy channel."""
+    request = load_request(EXAMPLES / "research_coupled_patch.yaml")
+    result = start_run(request, tmp_path / "coupled")
+    assert result.complete and result.native_status == "completed"
+    assert result.observables["pellet_speed_m_s"] > 0.0
+    assert result.observables["coupling_grid_energy_j"] != 0.0
+    assert "wall_normal_traction_energy_j" in result.observables
+    assert abs(result.observables["mass_residual_kg"]) < 1e-12
+    directory = RunDirectory(tmp_path / "coupled")
+    entities = recording_entities(directory.recording_paths()[0])
+    assert "/world/domain" in entities
+    assert "/observables/wall_normal_traction_energy_j" in entities
+    assert not any(entity.startswith("/world/boxes/") for entity in entities)

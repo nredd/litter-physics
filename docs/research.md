@@ -95,4 +95,25 @@ or material-law change has been used; liquid-pressure and full energy acceptance
 open. The former `wall_work_j` ledger was the grid projection kinetic-energy loss, not
 physical work; it is now split into `wall_normal_projection_energy_j` and
 `wall_friction_dissipation_j` with coupling energy terms and an algebraic
-`energy_residual_j`, none of which is an energy acceptance gate. See `energy-ledgers.md`.
+`energy_residual_j`. Normal wall-image deposits now also record
+`wall_normal_traction_energy_j`, the signed grid KE jump at the actual impulse
+application before gravity. This is not physical stationary-wall work, and none
+of these channels is an energy acceptance gate. See `energy-ledgers.md`.
+
+### Runnable coupled fixture
+
+`examples/research_coupled_patch.yaml` runs a 20 mm paste cube and one rigid
+pine-pellet proxy in a 40 mm domain for 50 ms: 8000 material points, 2 mm grid,
+50 us timestep and 5 ms recording interval. The 3 mm radius is at the kernel's
+minimum radius/grid ratio, not an accepted resolution. The first box supplies
+pellet geometry, not a second household simulation; replay draws the research
+domain. Synthetic rheology and contact are unvalidated. There is no absorption,
+fragmentation, adhesion, interacting pellet bed or closed energy balance.
+
+```sh
+uv run litter-physics run examples/research_coupled_patch.yaml --out outputs/coupled
+uv run litter-physics view outputs/coupled --open-browser
+```
+
+Use fresh output directories. The example exercises two-way coupling and signed
+wall-energy diagnostics; completion is not coupled convergence or leakage acceptance.

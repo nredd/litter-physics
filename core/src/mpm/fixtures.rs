@@ -391,6 +391,10 @@ impl FixtureSpec {
             "wall_friction_dissipation_j".into(),
             sim.ledger.wall_friction_dissipation,
         );
+        out.insert(
+            "wall_normal_traction_energy_j".into(),
+            sim.ledger.wall_normal_traction_energy,
+        );
         out.insert("energy_residual_j".into(), sim.energy_residual());
         out.insert("outflow_kg".into(), sim.ledger.outflow_mass);
         out.insert("particle_count".into(), particles.len() as f64);

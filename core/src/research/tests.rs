@@ -33,9 +33,20 @@ fn completes_a_real_fixture_without_claiming_validation() {
             .as_array()
             .expect("diagnostics")
             .iter()
-            .any(|message| message
-                .as_str()
-                .is_some_and(|text| text.contains("normal grid work is unledgered")))
+            .any(|message| message.as_str().is_some_and(|text| text
+                .contains("signed grid kinetic-energy diagnostic")
+                && text.contains("energy closure remains open")))
+    );
+    let traction = output["observables"]["wall_normal_traction_energy_j"]
+        .as_f64()
+        .expect("traction energy observable");
+    assert!(traction.is_finite() && traction != 0.0, "{traction}");
+    assert_eq!(
+        output["checkpoint"]["state"]["ledger"]["wall_normal_traction_energy"]
+            .as_f64()
+            .expect("ledger field")
+            .to_bits(),
+        traction.to_bits()
     );
     assert!(
         output["observables"]["mass_residual_kg"]
@@ -144,6 +155,23 @@ fn corrupt_checkpoint_histories_and_requests_are_rejected() {
     assert!(
         run(&input, Some(&checkpoint)).is_err(),
         "accepted a forged initial-energy baseline"
+    );
+    // A checkpoint written before the traction energy existed, or one whose
+    // value did not survive JSON, must be refused rather than resumed at zero.
+    let mut checkpoint = full["checkpoint"].clone();
+    checkpoint["state"]["ledger"]
+        .as_object_mut()
+        .expect("ledger object")
+        .remove("wall_normal_traction_energy");
+    assert!(
+        run(&input, Some(&checkpoint)).is_err(),
+        "accepted a checkpoint without traction energy history"
+    );
+    let mut checkpoint = full["checkpoint"].clone();
+    checkpoint["state"]["ledger"]["wall_normal_traction_energy"] = Value::Null;
+    assert!(
+        run(&input, Some(&checkpoint)).is_err(),
+        "accepted a null traction energy history"
     );
     let mut changed = input.clone();
     changed["seed"] = json!(99);

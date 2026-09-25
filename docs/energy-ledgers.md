@@ -1,7 +1,8 @@
 # Energy ledgers
 
 `core/src/mpm/solver.rs::Ledger` records discrete projection/coupling kinetic-energy
-changes plus contact-force and plastic-dissipation estimates. These are diagnostics.
+changes, normal wall-transfer grid energy, and contact-force/plastic-dissipation
+estimates. These are diagnostics.
 There is NO closed energy balance and no energy acceptance gate.
 
 ## What was wrong
@@ -45,10 +46,34 @@ the tangential velocity before and after the Coulomb reduction:
 The subsequent wall lattice completion (`hydrostatic-balance.md`) adds normal
 reaction impulses to nearby free nodes before this grid update. Those impulses
 are included in `wall_impulse`; their Coulomb reductions contribute to
-`wall_friction_dissipation` by the same nonnegative KE-loss formula. The KE
-change from the added normal impulses is **not** included in the ledger. The
-projection/friction identity above therefore does not cover the whole wall
-treatment, and unchanged energy-channel names do not imply unchanged trajectories.
+`wall_friction_dissipation` by the same nonnegative KE-loss formula.
+
+`wall_normal_traction_energy` now records the signed grid KE change of these
+normal deposits. For each deposit, with signed normal impulse `dp`, existing
+normal momentum `p`, and receiving-node mass `m`:
+
+```text
+Delta K = dp (p / m + dp / (2 m))
+        = ((p + dp)^2 - p^2) / (2 m)
+```
+
+The increment avoids subtracting two large energies. Sequential deposits on the
+same node telescope; the total equals a full before/after grid KE difference.
+Massless nodes receive neither impulse nor energy. No extra whole-grid scan is
+needed at runtime. Negative increments are retained: `m=2`, `p=-3`, `dp=2` gives
+`-2 J`, not a positive dissipation channel.
+
+The sampling point matters: momentum is read **after APIC/MLS transfer and before
+gravity**, exactly where the impulse is applied. Using gravity-shifted momentum
+instead would add `dt g . I_traction` to this channel. In a resting column, stress
+forces can already give free nodes upward momentum before gravity, so the normal
+reaction can add transient grid KE without doing physical external wall work.
+The projection/friction identity above covers only that later substep, not the
+whole transfer/gravity/wall sequence.
+
+This accounting addition does not change force or trajectory calculations.
+Nonfinite increments or accumulated traction history reject the trial before
+particle/energy updates are committed; accepted steps alone accumulate history.
 
 Pellet and coupling:
 
@@ -69,22 +94,30 @@ hydrostatic column starts with its elastic energy counted.
 
 `energy_residual = E(t) - E(0) - ledgered_energy` with
 `ledgered_energy = wall_normal_projection_energy - wall_friction_dissipation
-+ pellet_wall_work + coupling_grid_energy + coupling_pellet_energy - plastic_dissipation`.
++ wall_normal_traction_energy + pellet_wall_work + coupling_grid_energy
++ coupling_pellet_energy - plastic_dissipation`.
 
-This is an algebraic mixed grid/particle diagnostic. It is NOT an unexplained-energy
-closure: the resting column reports a positive residual equal to the projection loss
-because that energy was never in the particles. Also unledgered: APIC particle/grid
-transfer losses, constitutive and pellet time-discretisation error, contact spring
-energy, the normal lattice-completion impulse contribution, and the energy of
-outflow particles.
+This is an algebraic mixed grid/particle diagnostic, NOT an unexplained-energy
+closure. In the historical projection-only resting-column example, the positive
+residual included scratch-grid loss absent from particle energy. Booking another
+grid substep does not resolve that mismatch. APIC particle/grid transfer losses,
+discrete gravity and constitutive integration consistency, pellet integration
+error, contact spring energy and outflow energy remain unclosed. A larger or
+smaller residual after adding the new channel does not imply changed physics.
 
 ## Observables
 
 Removed: `wall_work_j`. Added: `wall_normal_projection_energy_j`,
-`wall_friction_dissipation_j`, `energy_residual_j`, and for `coupled_patch`
-`coupling_grid_energy_j`, `coupling_pellet_energy_j`. `Ledger::validate` rejects
-nonfinite values and wrong signs; checkpoints carrying the old `wall_work` field are
-rejected by `deny_unknown_fields`.
+`wall_friction_dissipation_j`, `wall_normal_traction_energy_j`, `energy_residual_j`,
+and for `coupled_patch` `coupling_grid_energy_j`, `coupling_pellet_energy_j`.
+`Ledger::validate` rejects nonfinite values and wrong projection/friction signs;
+traction energy is deliberately signed. Checkpoints carrying the old `wall_work`
+field are rejected by `deny_unknown_fields`.
+
+The new traction history is required in native checkpoints. Missing/null history
+is rejected, never defaulted to zero. Older recordings remain readable, but old
+checkpoints cannot be resumed with this build. JSON restart preserves the new
+history exactly; neither scratch transfers nor rejected steps may double-book it.
 
 Restart validates `initial_mechanical_energy` against the deterministically rebuilt
 initial state using exact float bits. JSON float round trips preserve that baseline;

@@ -47,8 +47,14 @@ checkpoint-domain gaps and misleading energy-ledger semantics, now regression-te
 pressure error from 29.7% to 1.15% at 10 ms, and stays at 1.27% at 100 ms.
 This is a bounded numerical improvement, not general liquid-pressure acceptance:
 free-surface error, contact range and both hydrostatic/slump refinement studies
-remain unresolved; added wall-reaction grid work is not ledgered. A bounded
-review and conservation tests do not establish research-grade accuracy.
+remain unresolved. The signed grid KE jump from normal wall-image deposits is
+now ledgered before gravity, with accepted-step accumulation and required restart
+history. This is not physical wall work or energy closure. Hydrostatic, slump and
+single-pellet CLI comparisons retain identical physical state and recorded frames;
+the new diagnostic changes only its channel and the algebraic energy residual.
+`examples/research_coupled_patch.yaml` makes the existing single-pellet/paste fixture
+runnable directly. A bounded review and conservation tests do not establish
+research-grade accuracy.
 
 The formal manuscript (`formal/simulation.pdf`, scientific baseline `9a66a55`)
 maps equations to implementation and preserves the unresolved refinement data.

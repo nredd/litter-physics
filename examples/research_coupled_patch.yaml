@@ -1,0 +1,44 @@
+# SYNTHETIC SINGLE-PELLET FIXTURE, not validated absorption or wet-litter physics.
+# The box supplies pellet geometry only; research.domain_m is the actual domain.
+# Resolution is at the kernel's minimum pellet-radius bound, NOT accepted refinement.
+schema_version: 1
+mode: research
+seed: 7
+duration_s: 0.05
+dt_s: 0.00005
+record_interval_s: 0.005
+max_wall_time_s: 900.0
+boxes:
+  - id: pellet-geometry
+    size_m: [0.04, 0.04, 0.04]
+    origin_m: [0.0, 0.0, 0.0]
+    slot_width_m: 0.005
+    slot_length_m: 0.015
+    slot_pitch_m: 0.02
+    drawer_depth_m: 0.01
+    pellet_count: 1
+    pellet_radius_m: 0.003
+    pellet_length_m: 0.012
+    pellet_density_kg_m3: 1100.0
+materials:
+  friction: 0.4
+  restitution: 0.2
+  normal_stiffness_n_m: 1000.0
+  water_capacity_ratio: 3.0
+  uptake_rate_s: 0.1
+  breakdown_rate_s: 0.01
+  evaporation_rate_s: 0.00001
+events: []
+research:
+  fixture: coupled_patch
+  grid_spacing_m: 0.002
+  domain_m: [0.04, 0.04, 0.04]
+  material: paste
+  density_kg_m3: 1000.0
+  young_modulus_pa: 1000.0
+  poisson_ratio: 0.2
+  yield_stress_pa: 30.0
+  consistency_pa_s_n: 10.0
+  flow_index: 0.6
+  initial_size_m: [0.02, 0.02, 0.02]
+  initial_velocity_m_s: [0.0, 0.0, 0.0]

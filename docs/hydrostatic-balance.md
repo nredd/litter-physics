@@ -193,9 +193,12 @@ estimates it from the material's own normal stress, which is what continuity
 of traction says at a contact, and leaves any residual to the projection.
 
 The traction impulse is booked into `Ledger::wall_impulse`, so the momentum
-residual stays at roundoff. Its work on the grid is NOT ledgered: the energy
-ledgers gain no term for it, and `energy_residual` absorbs it alongside the
-projection and transfer losses. That is a missing diagnostic, not a closure.
+residual stays at roundoff. The wall-contact milestone initially omitted its grid
+KE jump. This is now booked as signed `wall_normal_traction_energy`, evaluated
+at each normal deposit before gravity. It changes the algebraic energy residual,
+not the trajectory or any numerical result below other than that residual.
+It is not physical stationary-wall work or a closed energy balance; see
+`energy-ledgers.md` for the substep definition and restart rules.
 
 Two earlier variants and how they failed (both tests retained):
 
@@ -287,7 +290,8 @@ imbalance every step; it is also `1.2x` smaller than before the fix at
 - Stress-free material approaching a wall gets the half-cell layer weight as
   image stress for the steps before real stress builds: a nodal surrogate of
   the reaction, `~0.02 g` on the first free layer, not an exact traction.
-- The wall-traction work is not ledgered; `energy_residual` remains a mixed
+- Normal wall-transfer grid KE is now ledgered, not physical wall work;
+  `energy_residual` remains a mixed
   diagnostic, not an energy closure.
 - The same truncation exists at the pellet surface in `rigid::couple_grid`;
   nodes one cell outside a coupled pellet still lack the coupling traction.

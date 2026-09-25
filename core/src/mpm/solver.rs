@@ -94,6 +94,17 @@ pub struct Ledger {
     /// `sum_i m_i / 2 (|t_i|^2 - |t_i'|^2)` over reduced tangential velocities,
     /// equal to minus the friction impulse dotted with the midpoint velocity.
     pub wall_friction_dissipation: f64,
+    /// Grid kinetic-energy change from the face-normal wall lattice-completion
+    /// deposits of `Simulation::wall_traction_to_grid` in J (signed):
+    /// `sum dp (p_a / m + dp / (2 m))` per deposit, evaluated on the momentum
+    /// the receiving node holds at the deposit, i.e. after the APIC/MLS
+    /// transfer and BEFORE `Simulation::grid_update` adds gravity. Negative
+    /// when the reaction cancels momentum already heading into the wall,
+    /// positive when the completed lattice adds momentum along the node's
+    /// existing normal momentum (a resting column, whose free nodes carry the
+    /// upward stress-force momentum that gravity then removes). Sequential
+    /// grid-level bookkeeping, NOT physical work of the stationary wall.
+    pub wall_normal_traction_energy: f64,
     /// Work of the wall contact force on the pellet in J: `sum F . v_contact dt`
     /// with the start-of-step force and contact-point velocity. Includes
     /// recoverable spring energy, so it is neither dissipation nor external
@@ -149,12 +160,13 @@ impl fmt::Display for SolverError {
 impl std::error::Error for SolverError {}
 
 impl Ledger {
-    /// Sum of every ledgered energy exchange in J: wall projection loss, pellet
-    /// wall work and both coupling terms, minus wall friction and plastic
-    /// dissipation.
+    /// Sum of every ledgered energy exchange in J: wall projection loss, wall
+    /// traction jump, pellet wall work and both coupling terms, minus wall
+    /// friction and plastic dissipation.
     #[must_use]
     pub fn ledgered_energy(&self) -> f64 {
         self.wall_normal_projection_energy - self.wall_friction_dissipation
+            + self.wall_normal_traction_energy
             + self.pellet_wall_work
             + self.coupling_grid_energy
             + self.coupling_pellet_energy
@@ -176,6 +188,10 @@ impl Ledger {
                 self.wall_normal_projection_energy,
             ),
             ("wall_friction_dissipation", self.wall_friction_dissipation),
+            (
+                "wall_normal_traction_energy",
+                self.wall_normal_traction_energy,
+            ),
             ("pellet_wall_work", self.pellet_wall_work),
             ("coupling_grid_energy", self.coupling_grid_energy),
             ("coupling_pellet_energy", self.coupling_pellet_energy),
@@ -232,8 +248,13 @@ impl Ledger {
 enum StepFailure {
     Constitutive(ConstitutiveError),
     NonFiniteGrid,
-    Displacement { max_cells: f64 },
+    Displacement {
+        max_cells: f64,
+    },
     PelletNonFinite,
+    /// The traction transfer's energy increment or accumulated history became
+    /// non-finite; reject before committing any particle or ledger changes.
+    NonFiniteTractionEnergy,
 }
 
 impl fmt::Display for StepFailure {
@@ -245,6 +266,9 @@ impl fmt::Display for StepFailure {
                 write!(f, "particle moved '{max_cells}' cells in one step")
             }
             Self::PelletNonFinite => write!(f, "pellet state became non-finite"),
+            Self::NonFiniteTractionEnergy => {
+                write!(f, "wall traction kinetic-energy jump became non-finite")
+            }
         }
     }
 }
@@ -280,6 +304,18 @@ struct WallStep {
     impulse: Vector3<f64>,
     normal_projection_energy: f64,
     friction_dissipation: f64,
+    /// Signed grid kinetic-energy jump of the traction deposits.
+    normal_traction_energy: f64,
+}
+
+/// Totals of one wall-traction transfer, accumulated deposit by deposit.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct TractionTransfer {
+    /// Reaction impulse delivered to the grid in kg m/s.
+    impulse: Vector3<f64>,
+    /// Signed grid kinetic-energy jump of the deposits in J, see
+    /// [`Grid::deposit_reaction`].
+    energy: f64,
 }
 
 /// Simulation state: material, particles, grid, optional pellet, ledgers.
@@ -497,10 +533,16 @@ impl Simulation {
     /// Attempt one step of size `dt`; commit only on success.
     fn try_step(&mut self, dt: f64) -> Result<(), StepFailure> {
         self.sweep_outflow();
-        let traction_impulse = self.particle_to_grid(dt);
+        let traction = self.particle_to_grid(dt);
+        if !traction.energy.is_finite()
+            || !(self.ledger.wall_normal_traction_energy + traction.energy).is_finite()
+        {
+            return Err(StepFailure::NonFiniteTractionEnergy);
+        }
         let node_trials = self.grid_update(dt)?;
         let mut wall = WallStep {
-            impulse: traction_impulse,
+            impulse: traction.impulse,
+            normal_traction_energy: traction.energy,
             ..WallStep::default()
         };
         for (slot, trial) in self.grid.active.iter().zip(&node_trials) {
@@ -547,8 +589,15 @@ impl Simulation {
     /// APIC/MLS particle-to-grid transfer (serial, fixed order), followed by
     /// the wall-traction transfer of [`Self::wall_traction_to_grid`].
     ///
-    /// Returns: the wall-traction impulse delivered to the grid in kg m/s.
-    fn particle_to_grid(&mut self, dt: f64) -> Vector3<f64> {
+    /// Returns: the wall-traction totals delivered to the grid.
+    fn particle_to_grid(&mut self, dt: f64) -> TractionTransfer {
+        self.deposit_particles(dt);
+        self.wall_traction_to_grid(dt)
+    }
+
+    /// Clear the scratch grid and deposit APIC momentum plus the MLS stress
+    /// impulse of every particle (serial, fixed order).
+    fn deposit_particles(&mut self, dt: f64) {
         self.grid.clear();
         let layout = self.grid.layout;
         let dx2_inv = 4.0 / (layout.spacing * layout.spacing);
@@ -577,7 +626,6 @@ impl Simulation {
                 }
             }
         }
-        self.wall_traction_to_grid(dt)
     }
 
     /// Deposit the face-normal wall traction on free nodes whose particle
@@ -628,17 +676,27 @@ impl Simulation {
     /// material arriving at a wall gets the half-cell layer weight as image
     /// stress before real stress builds, and `∂σ_nn/∂n = -ρ g_n` drops the
     /// tangential shear gradients. The normal balance holds for a liquid at
-    /// rest; its linear continuation still approximates a varying density. The work of this force on the grid is not
-    /// ledgered and folds into [`Simulation::energy_residual`].
+    /// rest; its linear continuation still approximates a varying density.
     ///
-    /// Returns: total traction impulse in kg m/s, booked as wall impulse.
-    fn wall_traction_to_grid(&mut self, dt: f64) -> Vector3<f64> {
+    /// Energy: each deposit reports its signed grid kinetic-energy jump
+    /// ([`Grid::deposit_reaction`]) and the sum is booked as
+    /// [`Ledger::wall_normal_traction_energy`]. It is evaluated exactly where
+    /// the code applies the impulse, on the post-APIC momentum before
+    /// [`Self::grid_update`] adds `g dt`. It is the jump of only the traction
+    /// substep within P2G -> traction -> gravity -> projection, not the jump
+    /// a gravity-inclusive velocity would give. Potential energy is included
+    /// in mechanical energy, but discrete gravity/transfer consistency remains
+    /// unclosed. This is not physical work of the stationary wall.
+    ///
+    /// Returns: total traction impulse in kg m/s, booked as wall impulse, and
+    /// the signed kinetic-energy jump in J.
+    fn wall_traction_to_grid(&mut self, dt: f64) -> TractionTransfer {
         let layout = self.grid.layout;
         let extents = layout.extents();
         let half_width = TRACTION_HALF_WIDTH_CELLS * layout.spacing;
         let force_scale = -dt * 4.0 / (layout.spacing * layout.spacing);
         let gravity = self.config.gravity;
-        let mut impulse = Vector3::zeros();
+        let mut transfer = TractionTransfer::default();
         for p in 0..self.particles.len() {
             let position = self.particles.position[p];
             let mass = self.particles.mass[p];
@@ -714,15 +772,18 @@ impl Simulation {
                                 continue;
                             }
                             let index = layout.index(coords[0], coords[1], coords[2]);
-                            if self.grid.deposit_reaction(index, axis, inward, reaction) {
-                                impulse[axis] += reaction * inward;
+                            if let Some(jump) =
+                                self.grid.deposit_reaction(index, axis, inward, reaction)
+                            {
+                                transfer.impulse[axis] += reaction * inward;
+                                transfer.energy += jump;
                             }
                         }
                     }
                 }
             }
         }
-        impulse
+        transfer
     }
 
     /// Grid velocity update with gravity and Coulomb walls (node parallel).
@@ -900,6 +961,7 @@ impl Simulation {
         self.ledger.wall_impulse += wall.impulse;
         self.ledger.wall_normal_projection_energy += wall.normal_projection_energy;
         self.ledger.wall_friction_dissipation += wall.friction_dissipation;
+        self.ledger.wall_normal_traction_energy += wall.normal_traction_energy;
         self.ledger.gravity_impulse += self.config.gravity * (self.particles.total_mass() * dt);
     }
 
@@ -989,11 +1051,12 @@ impl Simulation {
 
     /// Algebraic diagnostic `E(t) - E(0) - ledgered_energy` in J.
     ///
-    /// This mixes particle mechanical energy with grid-level projection terms
-    /// and is NOT a physical unexplained-energy closure: transient grid kinetic
-    /// energy removed by the wall projection never reaches particle state, so
-    /// the resting hydrostatic column reports a positive residual growing
-    /// linearly in time. Particle/grid transfer losses, constitutive and pellet
+    /// This mixes particle mechanical energy with grid-level projection and
+    /// traction terms and is NOT a physical unexplained-energy closure:
+    /// in a resting column, transient grid energy can be introduced and removed
+    /// between transfers without appearing in particle mechanical energy.
+    /// The resulting nonzero residual is not a measure of physical wall work.
+    /// Particle/grid transfer losses, constitutive and pellet
     /// time-discretisation errors, contact spring energy and outflow energy are
     /// not ledgered either.
     #[must_use]
@@ -1320,6 +1383,200 @@ mod tests {
         assert!((ratio - 2.0).abs() < 0.1, "ratio={ratio} losses={losses:?}");
     }
 
+    /// Grid kinetic energy `sum |p|^2 / (2 m)` of the momentum-carrying scratch
+    /// grid, computed by a full scan independent of the incremental bookkeeping.
+    fn grid_momentum_energy(grid: &Grid) -> f64 {
+        grid.active
+            .iter()
+            .map(|&index| 0.5 * grid.momentum[index].norm_squared() / grid.mass[index])
+            .sum()
+    }
+
+    /// Full before/after grid kinetic-energy jump of the traction transfer on
+    /// one trial step, against the incremental sum the transfer reports.
+    fn assert_traction_energy_matches_full_scan(sim: &Simulation, dt: f64) -> f64 {
+        let mut reference = sim.clone();
+        reference.sweep_outflow();
+        reference.deposit_particles(dt);
+        let before = grid_momentum_energy(&reference.grid);
+        let transfer = reference.wall_traction_to_grid(dt);
+        let jump = grid_momentum_energy(&reference.grid) - before;
+        assert!(transfer.energy.is_finite());
+        assert!(
+            (transfer.energy - jump).abs() <= 1e-12 * jump.abs().max(1e-30),
+            "incremental {} vs full scan {jump}",
+            transfer.energy
+        );
+        transfer.energy
+    }
+
+    #[test]
+    fn resting_column_books_traction_energy_equal_to_independent_grid_jump() {
+        let (spec, mut sim) = resting_column(4e-5);
+        let dt = 4e-5;
+        let expected = assert_traction_energy_matches_full_scan(&sim, dt);
+        assert!(
+            expected != 0.0,
+            "the resting column must exercise the transfer"
+        );
+        // The transfer runs before gravity is added in `grid_update`: the free
+        // node's pre-gravity momentum already points inward (the stress force
+        // reacting gravity), so completing the lattice adds grid kinetic energy.
+        assert!(expected > 0.0, "expected a positive jump, got {expected}");
+        sim.try_step(dt).expect("accepted step");
+        assert_eq!(sim.ledger.wall_normal_traction_energy, expected);
+        assert_eq!(
+            sim.ledger.ledgered_energy(),
+            expected + sim.ledger.wall_normal_projection_energy
+                - sim.ledger.wall_friction_dissipation
+                - sim.ledger.plastic_dissipation
+        );
+        // Accumulates only over accepted steps and is exported as an observable.
+        let mut total = expected;
+        for _ in 0..5 {
+            total += assert_traction_energy_matches_full_scan(&sim, dt);
+            sim.try_step(dt).expect("accepted step");
+        }
+        assert_eq!(sim.ledger.wall_normal_traction_energy, total);
+        let obs = spec.observables(&sim);
+        assert_eq!(obs["wall_normal_traction_energy_j"], total);
+        assert_eq!(obs["energy_residual_j"], sim.energy_residual());
+    }
+
+    #[test]
+    fn coupled_patch_books_traction_energy_from_accepted_steps() {
+        use crate::mpm::fixtures::{Fixture, FixtureSpec, PelletSpec, ResourceLimits};
+        let mut cfg = config();
+        cfg.max_dt = 5e-5;
+        let spec = FixtureSpec {
+            fixture: Fixture::CoupledPatch,
+            material: Material::paste(1000.0, 1e4, 0.3, 10.0, 1.0, 1.0),
+            grid_spacing: 0.002,
+            domain: [0.03, 0.03, 0.03],
+            initial_size: [0.02, 0.02, 0.008],
+            initial_velocity: Vector3::zeros(),
+            seed: 7,
+            pellet: Some(PelletSpec {
+                radius: 0.003,
+                length: 0.012,
+                density: 1100.0,
+            }),
+            config: cfg,
+            limits: ResourceLimits {
+                max_particles: 100_000,
+                max_nodes: 1_000_000,
+            },
+        };
+        let (mut sim, _) = spec.build().unwrap_or_else(|e| panic!("{e}"));
+        sim.advance_to(2e-3).unwrap_or_else(|e| panic!("{e}"));
+        assert!(sim.pellet.is_some());
+        assert!(sim.ledger.wall_normal_traction_energy.is_finite());
+        assert!(sim.ledger.wall_normal_traction_energy != 0.0);
+        let before = sim.ledger.wall_normal_traction_energy;
+        let dt = 5e-5;
+        let expected = assert_traction_energy_matches_full_scan(&sim, dt);
+        sim.try_step(dt).expect("accepted coupled step");
+        assert_eq!(sim.ledger.wall_normal_traction_energy, before + expected);
+        let obs = spec.observables(&sim);
+        assert_eq!(
+            obs["wall_normal_traction_energy_j"],
+            sim.ledger.wall_normal_traction_energy
+        );
+        assert!(obs.contains_key("coupling_grid_energy_j"));
+    }
+
+    /// One compressed particle within half a cell of the floor (and optionally
+    /// the low `x` wall), so the traction transfer emits images.
+    fn contact_particle(
+        position: Vector3<f64>,
+        velocity: Vector3<f64>,
+        axes: &[usize],
+    ) -> Simulation {
+        let mut sim = empty_sim(Vector3::new(0.0, 0.0, -9.81));
+        let volume = 1e-9;
+        sim.particles
+            .push(position, velocity, sim.material.density * volume, volume);
+        let mut stress = nalgebra::Matrix3::zeros();
+        for &axis in axes {
+            stress[(axis, axis)] = -1000.0;
+        }
+        sim.particles.kirchhoff[0] = stress;
+        sim
+    }
+
+    #[test]
+    fn traction_energy_sign_follows_the_pre_gravity_normal_momentum() {
+        let dt = 1e-5;
+        let floor = Vector3::new(0.0105, 0.0105, 0.0005);
+        // At rest the free node above carries the upward stress-force momentum
+        // only, so the inward reaction adds kinetic energy.
+        let mut resting = contact_particle(floor, Vector3::zeros(), &[2]);
+        let positive = assert_traction_energy_matches_full_scan(&resting, dt);
+        assert!(positive > 0.0, "{positive}");
+        resting.try_step(dt).expect("accepted");
+        assert_eq!(resting.ledger.wall_normal_traction_energy, positive);
+        // Approaching the floor the nodes carry downward momentum that the
+        // upward reaction cancels: kinetic energy is removed.
+        let mut falling = contact_particle(floor, Vector3::new(0.0, 0.0, -0.1), &[2]);
+        let negative = assert_traction_energy_matches_full_scan(&falling, dt);
+        assert!(negative < 0.0, "{negative}");
+        falling.try_step(dt).expect("accepted");
+        assert_eq!(falling.ledger.wall_normal_traction_energy, negative);
+        assert!(falling.ledger.wall_impulse.z > 0.0);
+        // Separating faster than one gravity step: no image, no energy, no impulse.
+        let mut leaving = contact_particle(floor, Vector3::new(0.0, 0.0, 0.1), &[2]);
+        assert_eq!(assert_traction_energy_matches_full_scan(&leaving, dt), 0.0);
+        leaving.try_step(dt).expect("accepted");
+        assert_eq!(leaving.ledger.wall_normal_traction_energy, 0.0);
+        assert_eq!(leaving.ledger.wall_impulse, Vector3::zeros());
+        // A corner particle emits images across two faces onto shared nodes;
+        // the per-deposit sum still equals the full before/after jump.
+        let corner = Vector3::new(0.0005, 0.0105, 0.0005);
+        let mut cornered = contact_particle(corner, Vector3::new(-0.05, 0.0, -0.05), &[0, 2]);
+        let both = assert_traction_energy_matches_full_scan(&cornered, dt);
+        cornered.try_step(dt).expect("accepted");
+        assert_eq!(cornered.ledger.wall_normal_traction_energy, both);
+        assert!(cornered.ledger.wall_impulse.x > 0.0 && cornered.ledger.wall_impulse.z > 0.0);
+    }
+
+    #[test]
+    fn nonfinite_traction_energy_rejects_the_step_before_commit() {
+        let dt = 1e-5;
+        let floor = Vector3::new(0.0105, 0.0105, 0.0005);
+        let mut sim = contact_particle(floor, Vector3::zeros(), &[2]);
+        // A finite but absurd compressive stress yields a finite reaction whose
+        // squared momentum overflows: the diagnostic must not commit as `inf`.
+        sim.particles.kirchhoff[0][(2, 2)] = -1e300;
+        let reference = sim.clone();
+        let failure = sim.try_step(dt).expect_err("must reject");
+        assert!(
+            matches!(failure, StepFailure::NonFiniteTractionEnergy),
+            "{failure}"
+        );
+        assert_eq!(sim.ledger, reference.ledger);
+        assert_eq!(sim.particles, reference.particles);
+        sim.ledger.validate().expect("ledger stays finite");
+    }
+
+    #[test]
+    fn finite_traction_increment_cannot_overflow_accumulated_history() {
+        let dt = 1e-5;
+        let mut sim =
+            contact_particle(Vector3::new(0.0105, 0.0105, 0.0005), Vector3::zeros(), &[2]);
+        sim.particles.kirchhoff[0][(2, 2)] = -1e160;
+        sim.ledger.wall_normal_traction_energy = f64::MAX;
+        let reference = sim.clone();
+        let transfer = sim.particle_to_grid(dt);
+        assert!(transfer.energy.is_finite() && transfer.energy > 0.0);
+        assert!(!(sim.ledger.wall_normal_traction_energy + transfer.energy).is_finite());
+        assert!(matches!(
+            sim.try_step(dt),
+            Err(StepFailure::NonFiniteTractionEnergy)
+        ));
+        assert_eq!(sim.ledger, reference.ledger);
+        assert_eq!(sim.particles, reference.particles);
+    }
+
     #[test]
     fn coupling_energy_ledgers_match_direct_kinetic_changes() {
         use crate::mpm::rigid::{Pellet, couple_grid};
@@ -1434,6 +1691,7 @@ mod tests {
         sim.advance_to(2e-4).unwrap_or_else(|e| panic!("{e}"));
         let reference = sim.clone();
         assert!(reference.ledger.wall_normal_projection_energy < 0.0);
+        assert!(reference.ledger.wall_normal_traction_energy != 0.0);
         // 1 m/s over 5 ms crosses 2.5 cells and inverts the trial deformation:
         // rejected (constitutive or displacement) before any commit.
         let failure = sim.try_step(5e-3).expect_err("oversized step must reject");
@@ -1457,9 +1715,35 @@ mod tests {
         assert!(ledger.initial_mechanical_energy > 0.0);
         let json = serde_json::to_string(&ledger).unwrap_or_else(|e| panic!("{e}"));
         assert!(json.contains("wall_normal_projection_energy"));
+        assert!(json.contains("\"wall_normal_traction_energy\":"));
+        assert!(ledger.wall_normal_traction_energy != 0.0);
         assert!(!json.contains("\"wall_work\""));
         let restored: Ledger = serde_json::from_str(&json).unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(restored, ledger);
+        assert_eq!(
+            restored.wall_normal_traction_energy.to_bits(),
+            ledger.wall_normal_traction_energy.to_bits()
+        );
+        // Missing history is a hard error, never a silent zero.
+        let value: serde_json::Value =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("{e}"));
+        let mut missing = value.clone();
+        missing
+            .as_object_mut()
+            .expect("object")
+            .remove("wall_normal_traction_energy");
+        assert!(serde_json::from_value::<Ledger>(missing).is_err());
+        let mut null = value;
+        null["wall_normal_traction_energy"] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<Ledger>(null).is_err());
+        let mut bad = ledger;
+        bad.wall_normal_traction_energy = f64::INFINITY;
+        assert!(
+            bad.validate()
+                .expect_err("infinite traction energy")
+                .to_string()
+                .contains("`wall_normal_traction_energy` is nonfinite")
+        );
         assert!(
             serde_json::from_str::<Ledger>(
                 &json.replace("wall_normal_projection_energy", "wall_work")
