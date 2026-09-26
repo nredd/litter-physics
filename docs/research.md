@@ -100,6 +100,21 @@ physical work; it is now split into `wall_normal_projection_energy_j` and
 application before gravity. This is not physical stationary-wall work, and none
 of these channels is an energy acceptance gate. See `energy-ledgers.md`.
 
+### Substep energy audit and coupling blocker
+
+`Simulation::audit_step(dt)` measures one production step on a clone, including
+the quadratic APIC affine kinetic norm, shadow transport, stress, walls, gravity,
+coupling and endpoint storage. The bounded Rust example emits 60 actual measurements;
+see `energy-audit.md` for usage, analytic controls and the retained counterexample.
+Normal solver scans, physical observables and checkpoint fields are unchanged.
+
+A deliberately light body gains more kinetic energy from the accumulated reaction
+than the grid loses: `+0.5223008291 J` joint coupling change with no external work.
+The gain persists at 40/20/10 us. The old-surface-velocity projection followed by a
+finite-body kick is not generally energy stable. This milestone does not repair
+that constraint or claim physical closure; native output now explicitly warns of
+the known energy-creation case. Synthetic pine fixtures remain unvalidated too.
+
 ### Runnable coupled fixture
 
 `examples/research_coupled_patch.yaml` runs a 20 mm paste cube and one rigid

@@ -56,6 +56,15 @@ the new diagnostic changes only its channel and the algebraic energy residual.
 runnable directly. A bounded review and conservation tests do not establish
 research-grade accuracy.
 
+The new nonmutating substep audit (`energy-audit.md`) measures APIC affine energy,
+transfer losses, stress/storage mismatch and gravity/coupling stages without changing
+normal runs or checkpoints. Sixty bounded measurements reproduce the analytic
+free-fall integration defect and expose a coupling failure: a light-body probe
+creates `0.5223 J` during the grid/body constraint, independent of the sampled
+timestep. This is a real unresolved energy-stability defect, not merely an absent
+ledger channel. Finite-inertia coupling repair is the next priority; the audit's
+algebraic telescope is not physical acceptance.
+
 The formal manuscript (`formal/simulation.pdf`, scientific baseline `9a66a55`)
 maps equations to implementation and preserves the unresolved refinement data.
 Its derivation also makes model discrepancies explicit: household swelling leaves

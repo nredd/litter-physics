@@ -261,3 +261,40 @@ Milestone gate: **111 Rust tests and 159 Python tests**, no skips, 95% Python
 coverage; formatting, Clippy, type checks, Rust docs and schema checks clean.
 Installed-package tests passed all 159 cases on Python 3.12 and 3.14; the gate used
 3.13. `docs/formal/build.py --check` also passed without rebaselining frozen evidence.
+
+## Transient substep energy audit
+
+The opt-in `Simulation::audit_step` uses the production trial kernel on a clone,
+with an independent stress-free APIC scatter. Native tests compare transfer loss
+against analytic and stencil-variance references, not merely an algebraic telescope.
+They cover affine storage, opposite velocities, free fall, prestress, signed walls,
+light/heavy coupled bodies, plastic-history rounding, invalid/unstable steps,
+nonmutation and serialization. Actual local plastic work is captured before
+cumulative-history rounding; no physical dissipation is invented to close a sum.
+
+The release example in `core/examples/energy_audit.rs` completed all 60 bounded
+measurements. Each 40/20/10 us triple starts from the identical snapshot. Independent
+report checks recovered the analytic free-fall defect, pure transfer-variance loss
+and agreement with the existing wall/coupling histories. Maximum absolute telescope
+discrepancy was `1.8791e-16 J`, **not a physical closure result**. Numerical values,
+fixture scope and reproduction commands are in `energy-audit.md`.
+
+The retained light-body case exposes a real defect: joint coupling creates
+`0.5223008291 J` from a 1 J initial kinetic state with zero gravity or wall work,
+at all three timesteps. The physical passivity probe fails; the audit correctly
+reports that failure. No test requires the defect to persist, and the coupling
+algorithm is not repaired in this milestone. Native diagnostics now warn of it.
+
+Actual hydrostatic, slump and coupled YAML CLI runs were compared with the previous
+`604d768` energy-bookkeeping baseline. Canonical JSON comparisons of every particle
+row, species row, existing observable and physical checkpoint field matched exactly;
+only the runtime-dependent remaining wall budget was excluded. No persistent schema
+or numerical-law change was made. Local artifacts are
+`outputs/energy-audit-review/{audit,trajectory-comparison}.json` and
+`outputs/energy-audit-publish-{hydro,slump,coupled}`.
+
+Audit milestone gate: **124 Rust tests and 159 Python tests**, no skips, 95% Python
+coverage; formatting, Clippy, type checks, Rust docs and schema checks passed.
+Installed-package tests passed on Python 3.12 and 3.14; the gate used 3.13.
+The frozen manuscript check passed without changing its source, PDF or evidence.
+These green software checks do not override the failed physical passivity probe.

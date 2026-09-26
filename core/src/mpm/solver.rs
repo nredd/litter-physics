@@ -27,6 +27,7 @@ use std::fmt;
 use nalgebra::{Matrix3, Vector3};
 use rayon::prelude::*;
 
+use super::audit::{EnergyStages, grid_kinetic};
 use super::constitutive::{
     ConstitutiveError, Material, MaterialKind, symmetric_eigen3, update_liquid, update_paste,
 };
@@ -245,7 +246,7 @@ impl Ledger {
 
 /// Reason a trial step was rejected.
 #[derive(Debug, Clone, PartialEq)]
-enum StepFailure {
+pub(super) enum StepFailure {
     Constitutive(ConstitutiveError),
     NonFiniteGrid,
     Displacement {
@@ -532,8 +533,17 @@ impl Simulation {
 
     /// Attempt one step of size `dt`; commit only on success.
     fn try_step(&mut self, dt: f64) -> Result<(), StepFailure> {
+        self.try_step_captured(dt, None)
+    }
+
+    /// Shared trial kernel; snapshots are evaluated only for a transient audit.
+    pub(super) fn try_step_captured(
+        &mut self,
+        dt: f64,
+        mut audit: Option<&mut EnergyStages>,
+    ) -> Result<(), StepFailure> {
         self.sweep_outflow();
-        let traction = self.particle_to_grid(dt);
+        let traction = self.particle_to_grid(dt, audit.as_deref_mut());
         if !traction.energy.is_finite()
             || !(self.ledger.wall_normal_traction_energy + traction.energy).is_finite()
         {
@@ -551,6 +561,9 @@ impl Simulation {
             wall.normal_projection_energy += trial.normal_projection_energy;
             wall.friction_dissipation += trial.friction_dissipation;
         }
+        if let Some(stages) = audit.as_deref_mut() {
+            stages.grid_after_walls = grid_kinetic(&self.grid, true, Vector3::zeros());
+        }
         let mut pellet_trial = self.pellet.clone();
         let mut coupling = None;
         if let Some(pellet) = pellet_trial.as_mut() {
@@ -558,6 +571,9 @@ impl Simulation {
             let kinetic_before = pellet.kinetic_energy();
             pellet.apply_impulse(&result.impulse, &result.angular_impulse);
             let pellet_energy = pellet.kinetic_energy() - kinetic_before;
+            if let Some(stages) = audit.as_deref_mut() {
+                stages.pellet_after_coupling = pellet.kinetic_energy();
+            }
             let extents = self.grid.layout.extents();
             let wall = pellet.integrate(dt, &self.config.gravity, &extents, &self.config.contact);
             if !pellet.is_finite() || !pellet_energy.is_finite() {
@@ -565,7 +581,15 @@ impl Simulation {
             }
             coupling = Some((result, pellet_energy, wall));
         }
+        if let Some(stages) = audit.as_deref_mut() {
+            stages.grid_after_coupling = grid_kinetic(&self.grid, true, Vector3::zeros());
+        }
         let trials = self.grid_to_particle(dt)?;
+        if let Some(stages) = audit {
+            stages.plastic_dissipation = trials
+                .iter()
+                .fold(0.0, |sum, trial| sum + trial.dissipation);
+        }
         let max_cells = trials
             .iter()
             .fold(0.0f64, |m, t| m.max(t.displacement_cells));
@@ -590,9 +614,17 @@ impl Simulation {
     /// the wall-traction transfer of [`Self::wall_traction_to_grid`].
     ///
     /// Returns: the wall-traction totals delivered to the grid.
-    fn particle_to_grid(&mut self, dt: f64) -> TractionTransfer {
+    fn particle_to_grid(&mut self, dt: f64, audit: Option<&mut EnergyStages>) -> TractionTransfer {
         self.deposit_particles(dt);
-        self.wall_traction_to_grid(dt)
+        if let Some(stages) = audit {
+            stages.grid_after_stress = grid_kinetic(&self.grid, false, Vector3::zeros());
+            let traction = self.wall_traction_to_grid(dt);
+            stages.grid_after_traction = grid_kinetic(&self.grid, false, Vector3::zeros());
+            stages.grid_after_gravity = grid_kinetic(&self.grid, false, self.config.gravity * dt);
+            traction
+        } else {
+            self.wall_traction_to_grid(dt)
+        }
     }
 
     /// Clear the scratch grid and deposit APIC momentum plus the MLS stress
@@ -1566,7 +1598,7 @@ mod tests {
         sim.particles.kirchhoff[0][(2, 2)] = -1e160;
         sim.ledger.wall_normal_traction_energy = f64::MAX;
         let reference = sim.clone();
-        let transfer = sim.particle_to_grid(dt);
+        let transfer = sim.particle_to_grid(dt, None);
         assert!(transfer.energy.is_finite() && transfer.energy > 0.0);
         assert!(!(sim.ledger.wall_normal_traction_energy + transfer.energy).is_finite());
         assert!(matches!(
@@ -1662,7 +1694,7 @@ mod tests {
         );
         let mut reference = sim.clone();
         let dt = 1e-5;
-        let _ = reference.particle_to_grid(dt);
+        let _ = reference.particle_to_grid(dt, None);
         let trials = reference.grid_update(dt).expect("grid update");
         for (slot, trial) in reference.grid.active.iter().zip(trials) {
             reference.grid.momentum[*slot] = trial.velocity;

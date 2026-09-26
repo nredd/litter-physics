@@ -7,8 +7,8 @@
 //!   local implicit radial-return update ([`constitutive`]),
 //! - a weakly compressible Newtonian liquid tracked through its volume ratio,
 //! - Coulomb-friction domain walls with logged impulses ([`solver`]),
-//! - conservative two-way coupling to a rigid oriented multisphere pellet with
-//!   equal-and-opposite linear and angular impulses ([`rigid`]),
+//! - impulse-conserving two-way coupling to a rigid oriented multisphere pellet
+//!   ([`rigid`]); the current split can create kinetic energy for light bodies,
 //! - continuum CFL / viscous / contact-stability timestep control with step
 //!   rejection on failed constitutive solves ([`solver`]).
 //!
@@ -21,6 +21,9 @@
 //! - Jiang et al. 2015, APIC, <https://doi.org/10.1145/2766996>
 //! - Klar et al. 2016, principal-frame plastic return, <https://doi.org/10.1145/2897824.2925906>
 
+pub mod audit;
+#[cfg(test)]
+mod audit_tests;
 pub mod constitutive;
 pub mod fixtures;
 pub mod grid;

@@ -4,6 +4,8 @@
 changes, normal wall-transfer grid energy, and contact-force/plastic-dissipation
 estimates. These are diagnostics.
 There is NO closed energy balance and no energy acceptance gate.
+The [discrete energy audit](energy-audit.md) separates transfer, stress, gravity,
+wall and coupling stages without changing these historical observables.
 
 ## What was wrong
 

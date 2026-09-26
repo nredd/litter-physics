@@ -66,6 +66,8 @@ not photorealistic cats or reconstructed fluid surfaces.
   uptake/breakup/sifting/drying, and scoop/stir/empty/refill/clean maintenance.
 - Small MLS-MPM paste/liquid fixtures, implicit Herschel-Bulkley updates, adaptive
   timesteps, and a two-way single-pellet coupling fixture.
+- A [nonmutating substep energy audit](docs/energy-audit.md), including affine
+  transfer norms and a retained coupling-energy counterexample.
 - Strict configuration/schema checks, bounded jobs, full native checkpoints, build-
   compatible resume, immutable segment artifacts, Parquet metrics and Rerun replay.
 - Observation import, simple material fits, synthetic visit profiles, sweeps and benchmarks.
@@ -75,6 +77,8 @@ not photorealistic cats or reconstructed fluid surfaces.
 
 ## Not implemented or accepted
 
+- Energy-stable rigid coupling: the audit exposes artificial kinetic-energy creation
+  for a light body. Momentum conservation does not establish energy closure.
 - Research porous fines, wet fragmentation, adhesion and resolved liquid/pellet absorption.
 - Validated research-to-household response tables or realistic household paste transport.
 - Adaptive between-visit evolution for multi-day runs, actual box entrances/pads, and

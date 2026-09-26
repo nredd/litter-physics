@@ -371,6 +371,11 @@ pub struct CouplingResult {
 /// tangential relative velocity is reduced by Coulomb friction with coefficient
 /// `friction` times the removed normal speed.
 ///
+/// All nodes target the old body velocity; the accumulated reaction is applied
+/// afterward. This preserves impulses but can create joint kinetic energy for
+/// light bodies. It is NOT an energy-stable finite-inertia constraint solve;
+/// the `energy_audit` example retains a zero-external-work counterexample.
+///
 /// Parameters:
 /// - `grid` (`&mut Grid`): grid holding node velocities.
 /// - `pellet` (`&Pellet`): rigid body (velocity from the start of the step).
